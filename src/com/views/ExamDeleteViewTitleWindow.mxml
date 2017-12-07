@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009"  height="500" width="700" creationComplete="init();"
+			   xmlns:s="library://ns.adobe.com/flex/spark" title="삭제 확인!" close="fnCancelhandler();" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Metadata>
+		[Event(name="deleteComplete", type="flash.events.Event")]
+	</fx:Metadata>
+	<fx:Script>
+		<![CDATA[
+			import com.data.ExamInfo;
+			import mx.managers.PopUpManager;
+			
+			public var $data:ExamInfo
+			private var $delNo:int;
+			public var _year:String;
+			
+			private function init():void {
+				this.$delNo=int(this.$data.id);
+				this.chapterTi.text=$data.chapter;
+				this.d.selectedDate=this.$data.date;
+				this.etcTA.text=this.$data.etc;
+				this.problemTA.text=$data.problem;
+				this.viewsTA.text=$data.views;
+				this.attachmentFileTi.text=$data.attachmentFile;
+			}
+			private function fnInsertHandler():void {
+				this.dbEdit();
+				if(this.$data.attachmentFile!="") {
+					var source:File=new File(this.$data.attachmentFile);
+					if(source.exists) {
+						source.addEventListener(Event.COMPLETE,fnDeleteCompleteListener);
+						source.deleteFileAsync();
+					}
+				}
+			}
+			private function fnDeleteCompleteListener(e:Event):void {
+//				this.dbEdit();
+			}
+			private function dbEdit():void {
+				var filedb:File=File.documentsDirectory.resolvePath("com/jsy/lmp/"+this._year+"/examData.db");
+				var conn:SQLConnection=new SQLConnection();
+				conn.open(filedb);
+				var statement:SQLStatement=new SQLStatement();
+				statement.sqlConnection=conn;
+				statement.text="delete from examData where id="+this.$delNo;
+				statement.addEventListener(SQLEvent.RESULT,resultHandler);
+				statement.execute();
+			}
+			private function resultHandler(e:SQLEvent):void {
+				this.dispatchEvent(new Event("deleteComplete"));
+				PopUpManager.removePopUp(this);
+			}
+			private function fnCancelhandler():void {
+				PopUpManager.removePopUp(this);
+			}
+		]]>
+	</fx:Script>
+	<s:Label text="아래 항목을 정말 삭제합니까?" fontSize="20" fontWeight="bold" color="0x0000ff" left="20" top="10"/>
+	<s:FormItem label="날짜" fontSize="15"  y="60" right="50" >
+		<s:HGroup width="100%">
+			<mx:DateField id="d" enabled="false" editable="false"  />
+		</s:HGroup>
+	</s:FormItem>
+	<s:Form y="60"  width="100%" >
+		<s:FormItem label="단원 " width="100%" height="55">
+			<s:TextInput id="chapterTi" width="250" imeMode="KOREAN" editable="false" borderVisible="false" />
+		</s:FormItem>
+		<s:FormItem label="문제내용" >
+			<s:TextArea id="problemTA" width="100%" imeMode="KOREAN" height="70" editable="false" borderVisible="false"/>
+		</s:FormItem>
+		<s:FormItem label="보기 항목">
+			<s:TextArea id="viewsTA" width="100%" imeMode="KOREAN" height="50" editable="false" borderVisible="false"/>
+		</s:FormItem>
+		<s:FormItem label="특기사항" width="100%">
+			<s:TextArea id="etcTA" width="100%" imeMode="KOREAN" height="70" editable="false" borderVisible="false"/>
+		</s:FormItem>
+		<s:FormItem label="첨부파일" width="100%">
+			<s:HGroup width="100%" height="30">
+				<s:TextInput id="attachmentFileTi" width="250" editable="false" />
+			</s:HGroup>
+		</s:FormItem>
+	</s:Form>
+	<s:Button label="삭제하기" height="20" right="100" top="10" click="fnInsertHandler();" />
+	<s:Button label="취  소" height="20" right="10" top="10" click="fnCancelhandler();" />
+</s:TitleWindow>

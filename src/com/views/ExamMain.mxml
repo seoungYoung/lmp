@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Window xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  width="800" height="600" showStatusBar="false" title="평가항목 관리" creationComplete="init();"
+		  xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<s:RadioButtonGroup id="searchGroup" />
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import com.data.ExamInfo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.managers.PopUpManager;
+			public static var _ac:ArrayCollection;
+			[Bindable]
+			private var _viewData:ArrayCollection;
+			private var conn:SQLConnection; // 디비 연결
+			private var query:SQLStatement; // 디비 실행 명령
+			private var updateQuery:SQLStatement; // 디비 실행 업데이트 명령 변수
+			public var _year:String;
+			
+			private function init():void {
+				this.stage.nativeWindow.x=(Screen.mainScreen.bounds.width-this.stage.nativeWindow.width)/2;
+				this.stage.nativeWindow.y=(Screen.mainScreen.bounds.height-this.stage.nativeWindow.height)/2;
+				this.openDatabase(); 
+			}
+			private function openDatabase():void {
+				var file:File=File.documentsDirectory.resolvePath("./com/jsy/lmp/"+this._year+"/examData.db");
+				if(file.exists==false) {
+//					trace("file not exist");
+					connect(file,SQLMode.CREATE);
+					createTable();
+				}
+				else {
+					connect(file,SQLMode.UPDATE);
+					update();
+				}
+			}
+			private function update():void {
+				if(updateQuery==null) {
+					updateQuery=new SQLStatement();
+					updateQuery.addEventListener(SQLEvent.RESULT,updateComplete);
+					updateQuery.addEventListener(SQLErrorEvent.ERROR,updateFail);
+					updateQuery.sqlConnection=conn;
+				}
+				updateQuery.text="select * from examData";
+				updateQuery.execute();
+			}
+			private function updateComplete(e:SQLEvent):void {
+				var sm:SQLStatement=e.target as SQLStatement;
+				var result:SQLResult=sm.getResult();
+				if(result!=null && result.data!=null) {
+					var array:Array=result.data; // 모든 자료 가지고 있음
+					var tmp:Array=[]; // 
+					
+					for(var i:uint=0;i<array.length;i++) {
+						var imsi:ExamInfo=new ExamInfo();
+						imsi.id=array[i].id;
+						imsi.chapter=array[i].chapter;
+						imsi.problem=array[i].problem;
+						imsi.views=array[i].views;
+						imsi.etc=array[i].etc;
+						imsi.date=array[i].mDate;
+						var d:Date=array[i].mDate;
+						imsi.date1=d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();
+						imsi.attachmentFile=array[i].attachmentFile;
+						
+						tmp.push(imsi);
+					}
+					ExamMain._ac=new ArrayCollection(tmp);
+					this._viewData=new ArrayCollection(tmp);
+				}
+				else {
+					ExamMain._ac=new ArrayCollection();
+					this._viewData=new ArrayCollection();
+				}
+				infoLbl.text="전체 "+this._viewData.length+" 개";
+				this.chapterCountLoad();
+			}
+			private function chapterCountLoad():void {
+				var countQuery:SQLStatement=new SQLStatement();
+				countQuery.addEventListener(SQLEvent.RESULT,updateCountComplete);
+				countQuery.sqlConnection=conn;
+				countQuery.text="select chapter, COUNT(*) from examData GROUP BY chapter";
+				countQuery.execute();
+			}
+			private function updateCountComplete(e:SQLEvent):void {
+				var sm:SQLStatement=e.target as SQLStatement;
+				var result:SQLResult=sm.getResult();
+				if(result!=null && result.data!=null) {
+					var array:Array=result.data; // 모든 자료 가지고 있음
+					
+					for(var i:uint=0;i<array.length;i++) {
+//						trace(array[i]["chapter"],array[i]["COUNT(*)"]);
+						if(array[i]["chapter"]=="1") {
+							this.chap1TI.text=array[i]["COUNT(*)"]+" 개";
+						}
+						else if(array[i]["chapter"]=="2") {
+							this.chap2TI.text=array[i]["COUNT(*)"]+" 개";
+						}
+						else if(array[i]["chapter"]=="3") {
+							this.chap3TI.text=array[i]["COUNT(*)"]+" 개";
+						}
+						else if(array[i]["chapter"]=="4") {
+							this.chap4TI.text=array[i]["COUNT(*)"]+" 개";
+						}
+					}
+				}
+			}
+			private function updateFail(e:SQLEvent):void {
+				trace("update Error..");
+			}
+			private function createTable():void {
+				query.text="create table examData (id integer primary key autoincrement,chapter varchar(10),problem varchar(200),views varchar(200),mDate date,etc VARCHAR(200),attachmentFile VARCHAR(200));";
+				query.execute();
+			}
+			private function connect(file:File,fileMode:String):void {
+				conn=new SQLConnection();
+				conn.addEventListener(SQLEvent.OPEN,connectComplete);
+				try {
+					conn.open(file,fileMode);	
+					//					conn.open(file,fileMode,true,1024,encryptionKey);  보안 적용 오픈 방법
+				}
+				catch(e:Error) {
+					connectFail(e);	
+				}
+			}
+			private function connectComplete(e:SQLEvent):void {
+				query=new SQLStatement();
+				query.sqlConnection=conn;
+				query.addEventListener(SQLEvent.RESULT,queryResult);
+				query.addEventListener(SQLErrorEvent.ERROR,queryError);
+			}
+			private function queryResult(e:SQLEvent):void {
+				trace("query success");
+			}
+			private function queryError(e:SQLEvent):void {
+				trace("query Error");
+			}
+			private function connectFail(e:Error):void {
+				trace("connect Fail");
+			}
+			
+			private function fnSearchHandler():void {
+				infoLbl.text="00 건";
+				if(this.keyTI.text=="") {
+					this._viewData=ExamMain._ac;
+					for(var i:uint=0;i<this._viewData.length;i++) {
+						var imsi:ExamInfo=new ExamInfo();
+						imsi.etc=this._viewData[i].etc;
+					}
+					infoLbl.text=this._viewData.length+" 건";
+					this.insertBtn.enabled=this.editBtn.enabled=this.delBtn.enabled=true;
+//					Alert.show("검색 키를 입력하세요","확인",4,this);
+					var chap1:uint=0;
+					var chap2:uint=0;
+					var chap3:uint=0;
+					var chap4:uint=0;
+					for(i=0;i<this._viewData.length;i++) {
+						if(this._viewData[i]["chapter"]=="1") {
+							chap1++;
+						}
+						else if(this._viewData[i]["chapter"]=="2") {
+							chap2++;
+						}
+						else if(this._viewData[i]["chapter"]=="3") {
+							chap3++;
+						}
+						else if(this._viewData[i]["chapter"]=="4") {
+							chap4++;
+						}
+					}
+					this.chap1TI.text=chap1.toString();
+					this.chap2TI.text=chap2.toString();
+					this.chap3TI.text=chap3.toString();
+					this.chap4TI.text=chap4.toString();
+					return;
+				}
+				this.insertBtn.enabled=this.editBtn.enabled=this.delBtn.enabled=false;
+				var searchHangmok:String;
+				var array:Array=new Array();
+				if(this.searchGroup.selectedValue=="단원 검색") {
+					searchHangmok="chapter";
+				}
+				else {
+					searchHangmok="problem";
+				}
+				var reg:RegExp=new RegExp(this.keyTI.text+"\\w*","gi");
+				for(i=0;i<ExamMain._ac.length;i++) {
+					if(String(ExamMain._ac[i][searchHangmok]).search(reg)!=-1) {
+						array.push(ExamMain._ac[i]);
+					}
+				}
+				this._viewData=new ArrayCollection(array);
+				infoLbl.text=this._viewData.length+" 건";
+				chap1=0;
+				chap2=0;
+				chap3=0;
+				chap4=0;
+				for(i=0;i<array.length;i++) {
+					if(array[i]["chapter"]=="1") {
+						chap1++;
+					}
+					else if(array[i]["chapter"]=="2") {
+						chap2++;
+					}
+					else if(array[i]["chapter"]=="3") {
+						chap3++;
+					}
+					else if(array[i]["chapter"]=="4") {
+						chap4++;
+					}
+				}
+				this.chap1TI.text=chap1.toString();
+				this.chap2TI.text=chap2.toString();
+				this.chap3TI.text=chap3.toString();
+				this.chap4TI.text=chap4.toString();
+			}
+			
+			private function fnInsertHanldler():void {
+				var win:ExamInsertViewTitleWindow=new ExamInsertViewTitleWindow();
+				win._year=this._year;
+				win.addEventListener("saveComplete",this.insertListener);
+				PopUpManager.addPopUp(win,this,true);
+				PopUpManager.centerPopUp(win);
+			}
+			private function insertListener(e:Event):void {
+				Alert.show("추가했습니다.","확인",4,this);
+				this.update();
+			}
+			private function fnBujoDeleteHandler():void {
+				if(dg.selectedIndex==-1) {
+					Alert.show("삭제 항목을 선택하세요.","확인",4,this);
+					return;
+				}
+				var win:ExamDeleteViewTitleWindow=new ExamDeleteViewTitleWindow();
+				win._year=this._year;
+				win.$data=ExamInfo(this.dg.selectedItem);
+				win.addEventListener("deleteComplete",this.deleteListener);
+				PopUpManager.addPopUp(win,this,true);
+				PopUpManager.centerPopUp(win);
+			}
+			private function fnExamViewHandler(e:Event):void {
+				if(dg.selectedIndex==-1) {
+					Alert.show("보고자 하는 항목을 선택하세요.","확인",4,this);
+					return;
+				}
+				var win:ExamViewTitleWindow=new ExamViewTitleWindow();
+				win.$data=ExamInfo(this.dg.selectedItem);
+				PopUpManager.addPopUp(win,this,true);
+				PopUpManager.centerPopUp(win);
+			}
+			private function deleteListener(e:Event):void {
+				Alert.show("삭제했습니다.","확인",4,this);
+				this.update();
+			}
+			private function fnBujoEditHandler():void {
+				if(dg.selectedIndex==-1) {
+					Alert.show("수정 항목을 선택하세요.","확인",4,this);
+					return;
+				}
+				var win:ExamEditViewTitleWindow=new ExamEditViewTitleWindow();
+				win._year=this._year;
+				win.addEventListener("editComplete",this.editListener);
+				win.$data=ExamInfo(this.dg.selectedItem);
+				PopUpManager.addPopUp(win,this,true);
+				PopUpManager.centerPopUp(win);
+			}
+			private function editListener(e:Event):void {
+				Alert.show("수정했습니다.","확인",4,this);
+				this.update();
+			}
+		]]>
+	</fx:Script>
+	<s:Label text="[항목을 더블클릭하면 상세 내용을 볼 수 있습니다.]" color="0x0000ff" fontSize="15" fontWeight="bold"
+			 top="10" left="40" fontFamily="굴림체"/>
+	<s:DataGrid y="30" width="90%" height="70%" id="dg"  dataProvider="{this._viewData}" 
+				alternatingRowColors="[0xeeeeee, 0xEDFFE9]"
+			 doubleClick="fnExamViewHandler(event);" doubleClickEnabled="true"	horizontalCenter="0">
+		<s:columns >
+			<s:ArrayList>
+				<s:GridColumn headerText="ID" width="50"  >
+					<s:itemRenderer>
+						<fx:Component>
+							<s:GridItemRenderer  height="30">
+								<s:VGroup width="100%" height="100%" horizontalCenter="0" verticalCenter="0"
+										   horizontalAlign="center" verticalAlign="middle">
+									<s:Label text="{data.id}" horizontalCenter="0" verticalCenter="0" 
+											 height="100%" width="40"  fontWeight="bold"/>
+								</s:VGroup>
+							</s:GridItemRenderer>
+						</fx:Component>
+					</s:itemRenderer>
+				</s:GridColumn>
+				<s:GridColumn headerText="단원" width="100" >
+					<s:itemRenderer>
+						<fx:Component>
+							<s:GridItemRenderer>
+								<s:VGroup width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+									<s:Label text="{data.chapter} 단원" fontWeight="bold"/>
+								</s:VGroup>
+							</s:GridItemRenderer>
+						</fx:Component>
+					</s:itemRenderer>
+				</s:GridColumn>
+				<s:GridColumn headerText="문제내용"  >
+					<s:itemRenderer>
+						<fx:Component>
+							<s:GridItemRenderer>
+								<s:VGroup width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+									<s:Label text="{data.problem}" fontWeight="bold"/>
+								</s:VGroup>
+							</s:GridItemRenderer>
+						</fx:Component>
+					</s:itemRenderer>
+				</s:GridColumn>
+				<s:GridColumn headerText="날짜"  width="80" >
+					<s:itemRenderer>
+						<fx:Component>
+							<s:GridItemRenderer >
+								<s:VGroup width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+									<s:Label text="{data.date1}" fontWeight="bold"/>
+								</s:VGroup>
+							</s:GridItemRenderer>
+						</fx:Component>
+					</s:itemRenderer>
+				</s:GridColumn>
+				<s:GridColumn headerText="첨부 파일"  width="70" >
+					<s:itemRenderer>
+						<fx:Component>
+							<s:GridItemRenderer  render="init();" >
+								<fx:Script>
+									<![CDATA[
+										private function init():void {
+											if(data.attachmentFile!="") {
+												this.attachLbl.text="○";
+											}
+											else {
+												this.attachLbl.text="×";
+											}
+										}
+									]]>
+								</fx:Script>
+								<s:VGroup width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+									<s:Label id="attachLbl" fontSize="25" horizontalCenter="0" fontWeight="bold"/>
+								</s:VGroup>
+							</s:GridItemRenderer>
+						</fx:Component>
+					</s:itemRenderer>
+				</s:GridColumn>
+			</s:ArrayList>
+		</s:columns >
+	</s:DataGrid> 
+	<s:Label id="infoLbl" color="0x0000ff" fontSize="15" fontWeight="bold" right="50" top="10"/>
+	<s:Label text="Key Word(입력 후 엔터)" bottom="120" color="0x0000ff" fontSize="15" fontWeight="bold" 
+			 horizontalCenter="0" />
+	<s:TextInput width="120" bottom="80" id="keyTI" horizontalCenter="0" enter="fnSearchHandler();"
+				  imeMode="KOREAN" />
+	<s:Label text="1단원 : " bottom="120" fontFamily="굴림체" color="0x0000ff" fontSize="15" fontWeight="bold" right="150"/>
+	<s:TextInput width="120" bottom="115" id="chap1TI" fontSize="18" fontWeight="bold" editable="false" 
+				 borderVisible="false" right="10" />
+	<s:Label text="2단원 : " bottom="90" fontFamily="굴림체" color="0x0000ff" fontSize="15" fontWeight="bold" right="150"/>
+	<s:TextInput width="120" bottom="85" id="chap2TI" fontSize="18" fontWeight="bold" editable="false" 
+				 borderVisible="false" right="10" />
+	<s:Label text="3단원 : " bottom="60" fontFamily="굴림체" color="0x0000ff" fontSize="15" fontWeight="bold" right="150"/>
+	<s:TextInput width="120" bottom="55" id="chap3TI" fontSize="18" fontWeight="bold" editable="false" 
+				 borderVisible="false" right="10" />
+	<s:Label text="4단원 : " bottom="30" fontFamily="굴림체" color="0x0000ff" fontSize="15" fontWeight="bold" right="150"/>
+	<s:TextInput width="120" bottom="25" id="chap4TI" fontSize="18" fontWeight="bold" editable="false" 
+				 borderVisible="false" right="10" />
+	<s:Label text="자료 검색하기 Option :" fontSize="15" fontFamily="굴림체" bottom="100" fontWeight="bold" left="10" />
+	<s:VGroup bottom="80" left="200">
+		<s:RadioButton fontWeight="bold" label="단원 검색" selected="true" groupName="searchGroup"/>
+		<s:RadioButton label="문제에서 검색" fontWeight="bold" groupName="searchGroup"/>
+	</s:VGroup>
+	<s:HGroup width="80%" height="50" bottom="5" horizontalCenter="0">
+		<s:Button label="자료추가" id="insertBtn" height="25" click="fnInsertHanldler();"/>
+		<s:Spacer width="15" height="25"/>
+		<s:Button label="자료편집" height="25" id="editBtn" click="fnBujoEditHandler();"/>
+		<s:Spacer width="15" height="25"/>
+		<s:Button label="자료삭제" height="25" id="delBtn" click="fnBujoDeleteHandler();"/>
+		<s:Spacer width="90" height="25"/>
+		<s:Button label="창 닫기" color="0xff0000" fontWeight="bold" height="25" click="this.close();"/>
+	</s:HGroup>
+</s:Window>

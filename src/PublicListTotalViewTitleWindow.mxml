@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" close="fnCloseHandler();" title="공개 자료 모두 보기"  
+			     height="500" width="700"
+			   xmlns:s="library://ns.adobe.com/flex/spark" backgroundColor="0xcccccc" creationComplete="init();" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:metadata="org.osmf.metadata.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import com.data.MainInfo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.rpc.http.HTTPService;
+			[Bindable]
+			public var _student:MainInfo;
+			public var _year:String;
+			[Bindable]
+			private var _ac:ArrayCollection;
+			[Bindable]
+			private var imageName:String; // 선택학생의 사진
+
+			private function init():void {
+				this.nameLbl.text="[ 공개 데이터 리스트 ]";
+				var hs:HTTPService=new HTTPService();
+				hs.url=LessonManagementProgram._hsURL+"/lmp/loadOutTotalData.php?year="+this._year;
+				hs.resultFormat="text";
+				hs.addEventListener(ResultEvent.RESULT,fnResultOut);
+				hs.addEventListener(FaultEvent.FAULT,fnFault);
+				hs.send();
+			}
+			private function fnResultOut(e:ResultEvent):void {
+				var imsi:Array=String(e.result).split("\r\n\r\n");
+				var assa:Array=new Array();
+				for(var i:uint=0;i<imsi.length-1;i++) {
+					//					trace(tmp[i]);
+					var tmp:Array=String(imsi[i]).split("|||");
+					var o:Object={"id":tmp[0],"content":tmp[1],"writer":tmp[2],"pw":tmp[3],"recordDate":tmp[4],"name":tmp[5]};
+					assa.push(o);
+				}
+				this._ac=new ArrayCollection(assa);		
+			}
+			private function fnCloseHandler():void {
+				PopUpManager.removePopUp(this);
+			}
+			private function fnFault(e:FaultEvent):void {
+				//				trace(e.message);
+				Alert.show("접속에 실패했습니다.\n관리자 문의하세요");
+			}
+		]]>
+	</fx:Script>
+	<s:Label id="nameLbl" fontSize="20" fontWeight="bold" x="30" y="30" />
+	<s:DataGrid y="80" width="90%" height="70%" dataProvider="{this._ac}" horizontalCenter="0"
+				alternatingRowColors="[0xeeeeee, 0xEDFFE9]" >
+		<s:columns >
+			<s:ArrayList>
+				<s:GridColumn headerText="게시 내용" width="280" >
+					<s:itemRenderer>
+						<fx:Component>
+							<s:GridItemRenderer>
+								<s:TextArea text="{data.content}" height="100%" editable="false" width="100%"/>
+							</s:GridItemRenderer>
+						</fx:Component>
+					</s:itemRenderer>
+				</s:GridColumn>
+				<s:GridColumn headerText="기록교사 및 날짜"  >
+					<s:itemRenderer>
+						<fx:Component>
+							<s:GridItemRenderer>
+								<s:VGroup width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+									<s:Label text="이름 : {data.name}" fontWeight="bold"/>
+									<s:Spacer width="20"/>
+									<s:Label text="기록자:{data.writer} 선생님" fontWeight="bold"/>
+									<s:Spacer width="20"/>
+									<s:Label text="날짜:[{data.recordDate}]"  fontWeight="bold"/>
+								</s:VGroup>
+							</s:GridItemRenderer>
+						</fx:Component>
+					</s:itemRenderer>
+				</s:GridColumn>
+			</s:ArrayList>
+		</s:columns >
+	</s:DataGrid>
+</s:TitleWindow>

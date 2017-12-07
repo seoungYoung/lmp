@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" title="항목 추가" close="fnCancelhandler();"
+			   xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="init();" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<s:RadioButtonGroup id="giveTake" />
+	</fx:Declarations>
+	<fx:Metadata>
+		[Event(name="saveComplete", type="flash.events.Event")]
+	</fx:Metadata>
+	<fx:Script>
+		<![CDATA[
+			import com.data.BujoInfo;
+			import mx.managers.PopUpManager;
+			[Bindable]
+			private var $date:Date;
+			
+			private function init():void {
+				this.$date=new Date();
+				this.nameTi.setFocus();
+			}
+			private function fnInsertHandler():void {
+				var bujo:BujoInfo=new BujoInfo();
+				bujo.no=String(Number(BujoMain._ac.length)+1);
+				bujo.name=this.nameTi.text; 
+				bujo.date=new Date(d.selectedDate.getFullYear(),d.selectedDate.getMonth(),d.selectedDate.getDate());
+				bujo.date1=d.selectedDate.getFullYear()+"-"+(d.selectedDate.getMonth()+1)+"-"+d.selectedDate.getDate();
+				bujo.money=this.amountTi.text;
+				bujo.reason=this.relationTi.text;
+				bujo.giveATake=(this.giveTake.selectedValue=="부조함") ? "give" : "take";
+				bujo.etc=this.etcTi.text;
+				
+				var filedb:File=File.documentsDirectory.resolvePath("com/jsy/lmp/bujoList.db");
+				var conn:SQLConnection=new SQLConnection();
+				conn.open(filedb);
+				var statement:SQLStatement=new SQLStatement();
+				statement.sqlConnection=conn;
+				var mName1:String=bujo.name;
+				var mDate1:Date=bujo.date;
+				var amount1:String=bujo.money;
+				var relation1:String=bujo.reason;
+				var giveTake1:String=bujo.giveATake;
+				var etc1:String=bujo.etc;
+				statement.text="insert into bujo(name,money,reason,bDate,giveATake,etc) " +
+					"values(@mName,@amount,@relation,@mDate,@giveTake,@etc)";
+				statement.parameters["@mName"]=mName1;
+				statement.parameters["@amount"]=amount1;
+				statement.parameters["@relation"]=relation1;
+				statement.parameters["@mDate"]=mDate1;
+				statement.parameters["@giveTake"]=giveTake1;
+				statement.parameters["@etc"]=etc1;
+				
+				statement.execute();
+
+				this.dispatchEvent(new Event("saveComplete"));
+				PopUpManager.removePopUp(this);
+			}
+			private function fnCancelhandler():void {
+				PopUpManager.removePopUp(this);
+			}
+		]]>
+	</fx:Script>
+	<s:Form y="60"  width="100%" >
+		<s:FormItem label="이름 " width="100%" height="55">
+			<s:TextInput id="nameTi" width="250" imeMode="KOREAN" />
+		</s:FormItem>
+		<s:FormItem label="부조금액" width="100%" height="55">
+			<s:HGroup verticalAlign="middle">
+				<s:TextInput id="amountTi" width="200"/>
+				<s:Label text=" 원" color="0xff0000"/>
+			</s:HGroup>
+		</s:FormItem>
+		<s:FormItem label="관계" width="100%" height="55">
+			<s:TextInput id="relationTi" width="250" imeMode="KOREAN" />
+		</s:FormItem>
+		<s:FormItem label="날짜" fontSize="15"  width="100%" height="55">
+			<s:HGroup width="100%">
+				<mx:DateField id="d" selectedDate="{this.$date}" />
+				<s:RadioButton label="부조함" id="give" fontSize="12"   groupName="giveTake" selected="true" />
+				<s:RadioButton label="받음" fontSize="12" groupName="giveTake" />
+			</s:HGroup>
+		</s:FormItem>
+		
+		<s:FormItem label="특기사항" width="100%" height="55">
+			<s:TextInput id="etcTi" width="250" imeMode="KOREAN" />
+		</s:FormItem>
+	</s:Form>
+	<s:Button label="추가하기" height="20" right="100" top="10" click="fnInsertHandler();" />
+	<s:Button label="취소하기" height="20" right="10" top="10" click="fnCancelhandler();" />
+</s:TitleWindow>

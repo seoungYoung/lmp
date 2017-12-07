@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" title="평가 항목 추가" height="500" width="700"
+			   xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="init();" 
+			   close="fnCancelhandler();"
+			   xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Metadata>
+		[Event(name="saveComplete", type="flash.events.Event")]
+	</fx:Metadata>
+	<fx:Script>
+		<![CDATA[
+			import com.data.ExamInfo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.managers.PopUpManager;
+			
+			[Bindable]
+			private var $date:Date;
+			private var source:File;
+			private var target:File;
+			public var _year:String;
+			[Bindable]
+			private var _chapterList:ArrayCollection=new ArrayCollection([1,2,3,4,5,6]);
+			
+			private function init():void {
+				this.$date=new Date();
+			}
+			private function fnInsertHandler():void {
+				if(this.attachmentFileTi.text =="") {
+					this.fnDBInsertHandler();
+				}
+				else {
+					var d:Date=new Date();
+					var sourceName:String=d.getFullYear()+"_"+(d.getMonth()+1)+"_"+d.getDate()+"_"+source.name;
+					target=File.documentsDirectory.resolvePath("./com/jsy/lmp/"+this._year+"/assets/attachmentFile/"+sourceName);
+					if(target.exists) {
+						Alert.show("파일이 존재합니다.\n확인 후 첨부하세요","경고",4,this);
+						return;
+					}
+					else {
+						this.copyExecute();
+					}
+				}
+			}
+			private function fnDBInsertHandler():void {
+				var exam:ExamInfo=new ExamInfo();
+				exam.chapter=this.cb.selectedItem;
+				exam.problem=this.problemTA.text;
+				exam.views=this.viewsTA.text;
+				exam.etc=this.etcTA.text;
+				exam.date=new Date(d.selectedDate.getFullYear(),d.selectedDate.getMonth(),d.selectedDate.getDate());
+				exam.date1=d.selectedDate.getFullYear()+"-"+(d.selectedDate.getMonth()+1)+"-"+d.selectedDate.getDate();
+				if(this.attachmentFileTi.text=="") exam.attachmentFile="";
+				else exam.attachmentFile=this.target.nativePath;
+				var filedb:File=File.documentsDirectory.resolvePath("./com/jsy/lmp/"+this._year+"/examData.db");
+				var conn:SQLConnection=new SQLConnection();
+				conn.open(filedb);
+				var statement:SQLStatement=new SQLStatement();
+				statement.sqlConnection=conn;
+				var mChapter:String=exam.chapter;
+				var mDate1:Date=exam.date;
+				var mProblem:String=exam.problem;
+				var mViews:String=exam.views;
+				var mEtc:String=exam.etc;
+				var mAttachmentFile:String=exam.attachmentFile;
+				statement.text="insert into examData(chapter,problem,views,mDate,etc,attachmentFile) " +
+					"values(@chapter,@problem,@views,@mDate,@etc,@attachmentFile)";
+				statement.parameters["@chapter"]=mChapter;
+				statement.parameters["@problem"]=mProblem;
+				statement.parameters["@views"]=mViews;
+				statement.parameters["@mDate"]=mDate1;
+				statement.parameters["@etc"]=mEtc;
+				statement.parameters["@attachmentFile"]=mAttachmentFile;
+				
+				statement.execute();
+				
+				this.dispatchEvent(new Event("saveComplete"));
+				PopUpManager.removePopUp(this);
+			}
+			private function fnCancelhandler():void {
+				PopUpManager.removePopUp(this);
+			}
+			private function fnSearchHandler():void {
+				var file:File=File.desktopDirectory;
+				file.addEventListener(Event.SELECT,fnDirectorySelectListener);
+				file.browseForOpen("첨부파일을 선택하세요");
+			}
+			
+			private function fnDirectorySelectListener(e:Event):void {
+				source=(e.target) as File;
+//				trace(source.nativePath);
+				this.attachmentFileTi.text=source.nativePath;
+			}
+			private function copyExecute():void {
+//				trace(target.nativePath);
+				source.addEventListener(Event.COMPLETE,fnCopyCompleteListener);
+				source.copyToAsync(target);
+			}
+			private function fnCopyCompleteListener(e:Event):void {
+//				trace("복사 완료");
+				this.fnDBInsertHandler();
+			}
+		]]>
+	</fx:Script>
+	<s:FormItem label="날짜" fontSize="15"  y="60" right="50" >
+		<s:HGroup width="100%">
+			<mx:DateField id="d" selectedDate="{this.$date}" />
+		</s:HGroup>
+	</s:FormItem>
+	<s:Form y="60"  width="100%" >
+		<s:FormItem label="단원 " width="100%" height="55">
+			<s:HGroup verticalAlign="middle">
+				<s:ComboBox id="cb" dataProvider="{this._chapterList}" prompt="단원을 선택하세요!" />
+				<s:Label text="단원" color="0x0000ff" fontSize="17"/>
+			</s:HGroup>
+		</s:FormItem>
+		<s:FormItem label="문제내용" >
+				<s:TextArea id="problemTA" width="100%" imeMode="KOREAN" height="60"/>
+		</s:FormItem>
+		<s:FormItem label="보기 항목">
+			<s:TextArea id="viewsTA" width="100%" imeMode="KOREAN" height="50"/>
+		</s:FormItem>
+		<s:FormItem label="특기사항" width="100%">
+			<s:TextArea id="etcTA" width="100%" imeMode="KOREAN" height="50"/>
+		</s:FormItem>
+		<s:FormItem label="첨부파일" width="100%">
+			<s:HGroup width="100%" height="30">
+				<s:TextInput id="attachmentFileTi" width="250" editable="false" />
+				<s:Spacer width="20"/>
+				<s:Button label="첨부파일 찾기" click="fnSearchHandler();"/>
+			</s:HGroup>
+		</s:FormItem>
+	</s:Form>
+	<s:Button label="추가하기" height="20" right="100" top="10" click="fnInsertHandler();" />
+	<s:Button label="취소하기" height="20" right="10" top="10" click="fnCancelhandler();" />
+</s:TitleWindow>

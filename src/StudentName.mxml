@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009"  
+			   title="좌석 배치표" skinClass="TitleWindowSkin" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" backgroundColor="0xcccccc" creationComplete="init();"
+			   xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Metadata>
+		[Event(name="studentChange", type="flash.events.Event")]
+	</fx:Metadata>
+	<fx:Script>
+		<![CDATA[
+			import com.data.MainInfo;
+			import com.views.ImageView;
+			import com.views.NameView;
+			import com.views.RandomSelectView;
+			
+			import mx.collections.ArrayList;
+			import mx.controls.Alert;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.ResultEvent;
+			import mx.rpc.http.HTTPService;
+			import mx.utils.StringUtil;
+			
+			import spark.components.Label;
+			import spark.components.TitleWindow;
+			
+			import caurina.transitions.Tweener;
+			[Bindable]
+			public static var _stageWidth:Number;
+			[Bindable]
+			public static var _stageHeight:Number;
+			public static var totalData:Array;
+			public var _year:String;
+			private var loader:Loader=new Loader();
+			//			private var totalData:Array=new Array();
+			private var comboData:ArrayList=new ArrayList([1,2,3,4,5,6,7,8]);
+			private var comboYearData:ArrayList=new ArrayList([1,2,3]);
+			private var loadPath:String="assets/com/jsy/lmp/assets/";
+			[Bindable]
+			private var randomButtonVisible:Boolean=false;
+			private var viewName:Array;
+			private var positionArray:Array=[
+				[820,565],[670,565],[520,565],[370,565],[220,565],[70,565],[820,480],
+				[670,480],[520,480],[370,480],[220,480],[70,480],[820,395],[670,395],
+				[520,395],[370,395],[220,395],[70, 395],[820,310],[670,310],
+				[520,310],[370,310],[220,310],[70,310],[820,225],[670,225],
+				[520,225],[370,225],[220,225],[70,225],[820,140],[670,140],
+				[520,140],[370,140],[220,140],[70,140],[820,55],[670,55],
+				[520,55],[370,55],[220,55],[70,55],[820,0],[670,0],
+				[520,0],[370,0],[220,0],[70,0]];
+			
+			private function init():void {
+				this.width=StudentName._stageWidth;
+				this.height=StudentName._stageHeight;
+				sel_cb.dataProvider=comboData;
+				this.sel_year.dataProvider=comboYearData;
+				sel_year.setStyle("fontSize",17);
+				sel_cb.setStyle("fontSize",17);
+				for(var i:uint=7;i>0;i--) {
+					var btn:Label=new Label();
+					btn.text=i.toString();
+					btn.x=StudentName._stageWidth-50;
+					btn.y=(StudentName._stageHeight-95)-i*85;
+					this.addElement(btn);
+				}
+				for(i=7;i>0;i--) {
+					btn=new Label();
+					btn.text=i.toString();
+					btn.x=25;
+					btn.y=(StudentName._stageHeight-95)-i*85;
+					this.addElement(btn);
+				}
+				/*
+				var file:File=File.documentsDirectory.resolvePath("com/jsy/lmp/assets/name.dat");
+				var stream:FileStream=new FileStream();
+				stream.open(file,FileMode.READ);
+				var str:String=stream.readMultiByte(stream.bytesAvailable,File.systemCharset);
+				//			trace(stream.readMultiByte(stream.bytesAvailable,File.systemCharset));
+				stream.close();																
+				str=str.split("\r").join("");
+				//			txt.text=str;
+				var imsi:Array=new Array();
+				imsi=str.split("\n");
+				for(var i:uint=0;i<imsi.length-1;i++) {
+				var tmp:Array=imsi[i].split(",");
+				var mainInfo:MainInfo=new MainInfo();
+				mainInfo.ban=String(tmp[0]);
+				mainInfo.ban_no=tmp[1];
+				mainInfo.name=tmp[2]; 
+				totalData.push(mainInfo);
+				}
+				*/
+			}
+			private function fnCloseHandler():void {
+				PopUpManager.removePopUp(this);
+			}
+			
+			private function comboChangeListener(e:Event=null):void {
+				if(this.sel_year.selectedIndex==-1) {
+					Alert.show("학년을 먼저 선택하세요.");
+					return;
+				}
+				banName_txt.text=this.sel_year.selectedItem+"학년"+ this.sel_cb.selectedItem+" 반 명렬";
+				banName_txt.setStyle("fontSize",20);
+				viewName=new Array();
+				for(var i:int=0;i<totalData.length;i++) {
+					var tmp:MainInfo=new MainInfo();
+					tmp=totalData[i];
+					if(tmp.year==this.sel_year.selectedItem && tmp.ban==this.sel_cb.selectedItem) {
+						viewName.push(tmp);
+					}
+				}
+				viewNameFunction();
+			}
+			private function comboYearChange():void {
+				this.sel_cb.selectedIndex=-1;
+			}
+			private function viewNameFunction():void {
+				ui.removeAllElements();
+				var j:int=0;
+				for (var i:int = 0; i<viewName.length; i++) {
+					var temp:MainInfo=new MainInfo();
+					temp=viewName[i];
+					if (i%6 == 0) {
+						j = 0;
+					}
+					var mc:NameView=new NameView();
+					mc.$mainInfo=temp;
+					var tx:int=this.positionArray[int(temp.seatNumber)-1][0];
+					var ty:int=this.positionArray[int(temp.seatNumber)-1][1];
+					mc._tx=tx;
+					mc._ty=ty;
+					//					mc._tx=820+150*j;
+					//					mc._ty=650+k*85;
+					//					trace(mc._tx,mc._ty);
+					mc.x=Math.random()*1024; 
+					mc.y=Math.random()*768;
+					//					mc.width=100;
+					mc.height=50;
+					if(mc.$mainInfo.name=="전출") {
+						mc.setStyle("color",0xff0000);
+					}
+					else {
+						mc.setStyle("color",0x0000ff);
+					}
+					ui.addElement(mc);
+					mc.addEventListener(MouseEvent.MOUSE_OVER,fnOverListener);
+					mc.addEventListener(MouseEvent.MOUSE_OUT,fnOutListener);
+					mc.addEventListener(MouseEvent.CLICK,fnClickHandler);
+					j--;
+				}
+				this.randomButtonVisible=((this.sel_year.selectedIndex!=-1) && (this.sel_cb.selectedIndex!=-1));
+			}
+			private function fnClickHandler(e:MouseEvent):void {
+				var mc:NameView=NameView(e.currentTarget);
+				var win:SwapSeatTitleWindow=new SwapSeatTitleWindow();
+				win._source=mc.$mainInfo;
+				win._year=this._year;
+				win.addEventListener("swapChange",reloadData);
+				PopUpManager.addPopUp(win,this,true);
+				PopUpManager.centerPopUp(win);
+				//				trace(mc.$mainInfo.ban_no);
+			}
+			
+			private function fnOverListener(e:MouseEvent):void {
+				var mc:NameView=e.currentTarget as NameView;
+				var stName:String=mc.$mainInfo.name.substr(0,3); 
+				//								trace(stName);
+				//				var fileName:String=this.loadPath+"picture/"+this.sel_cb.selectedItem+"/"+stName+"("+mc.$no+").jpg";
+				var fileName:String=LessonManagementProgram._hsURL+"/lmp/years/year"+this._year+"/year_"+this.sel_year.selectedItem+"/"+this.sel_cb.selectedItem+"/"+stName+"("+mc.$mainInfo.ban_no+").jpg";
+				//								trace(fileName);
+				//								return;
+				if(stage.getChildByName("imageID")) {
+					stage.removeChild(stage.getChildByName("imageID"));
+				}
+				//				trace(e.currentTarget.name);
+				//				trace(fileName);
+				var image:ImageView=new ImageView(fileName,stName);
+				image.addEventListener("errorOccur",fnOccurHandler);
+				image.name="imageID";
+				if(stage.mouseX>800 || stage.mouseY>500) {
+					image.x=(stage.stageWidth-image.width)/2;
+					image.y=200;
+				}
+				else {
+					image.x=stage.mouseX;
+					image.y=stage.mouseY;
+				}
+				stage.addChild(image);
+			}
+			private function fnOccurHandler(e:Event):void {
+				return;
+			}
+			private function fnOutListener(e:MouseEvent):void {
+				if(stage.getChildByName("imageID")) {
+					stage.removeChild(stage.getChildByName("imageID"));
+				}
+			}
+			private function randomSelListener():void {
+				if(viewName==null || viewName.length<0) {
+					return;
+				}
+				loader.x=200;
+				var timer:Timer=new Timer(1000,1);
+				//				timer.addEventListener(TimerEvent.TIMER,fnTimer);
+				timer.addEventListener(TimerEvent.TIMER_COMPLETE,fnTimerComplete);
+				timer.start();
+			}
+			private function fnTimer(e:TimerEvent):void {
+				loader.visible=false;
+				var num:int=int(Math.random()*viewName.length); 
+				var tmp:MainInfo=viewName[num];
+				var str:String=tmp.name;
+				if(tmp.name=="전출" || tmp==null) return;
+				//				if(tmp.name.length<=3) {
+				//					str=tmp.name;
+				//					//					trace("3");
+				//				}
+				//				else {
+				//					str=tmp.name.substr(0,3);
+				//					//					trace("result=",str);
+				//				}
+				//				var fileName:String=this.loadPath+"picture/"+sel_cb.selectedItem+"/"+str+"("+tmp.ban_no+")"+".jpg";
+				var fileName:String=LessonManagementProgram._hsURL+"/lmp/years/year"+this._year+"/year_"+this.sel_year.selectedItem+"/"+sel_cb.selectedItem+"/"+str+"("+tmp.ban_no+")"+".jpg";
+				//				trace(fileName);
+				loader.contentLoaderInfo.addEventListener(Event.COMPLETE,fnComp);
+				loader.load(new URLRequest(fileName));
+			}
+			private function fnComp(e:Event):void {
+				loader.visible=true;
+			}
+			private function fnTimerComplete(e:TimerEvent):void {
+				var num:int=int(Math.random()*viewName.length);
+				var tmp:MainInfo=viewName[num];
+				var str:String;
+				if(tmp.name.length<=3) {
+					str=tmp.name;
+				}
+				else {
+					str=tmp.name.substr(0,3);
+				}
+				
+				loadPicture(str,tmp);
+				loader.x=stage.stageWidth+100;
+				//				this.stage.removeChild(loader);
+			}
+			private function loadPicture(str:String,tmp:MainInfo):void {
+				//				var fileName:String=this.loadPath+"picture/"+sel_cb.selectedItem+"/"+str+"("+tmp.ban_no+")"+".jpg";
+				var fileName:String=LessonManagementProgram._hsURL+"/lmp/years/year"+this._year+"/year_"+this.sel_year.selectedItem+"/"+sel_cb.selectedItem+"/"+str+"("+tmp.ban_no+")"+".jpg";
+				var win:RandomSelectView=PopUpManager.createPopUp(this,RandomSelectView,true) as RandomSelectView;
+				win.title=tmp.ban_no+". "+tmp.name;
+				win._image=fileName;
+				PopUpManager.centerPopUp(win);		
+				win.alpha=0;
+				Tweener.addTween(win, {alpha:1, time:2});
+			}
+			private function reloadData(e:Event):void {
+				var hs:HTTPService=new HTTPService();
+				hs.url=LessonManagementProgram._hsURL+"/lmp/loadData.php?year="+this._year;
+				hs.resultFormat="text";
+				hs.addEventListener(ResultEvent.RESULT,fnResult1);
+				hs.send();
+			}
+			private function fnResult1(e:ResultEvent):void {
+				//				trace(e.result);
+				totalData=new Array();
+				var imsi:Array=String(e.result).split("\r\n");
+				for(var i:uint=0;i<imsi.length-1;i++) {
+					//					trace(tmp[i]);
+					var tmp:Array=String(imsi[i]).split("|||");
+					var mainInfo:MainInfo=new MainInfo();
+					mainInfo.year=String(tmp[1]);
+					mainInfo.ban=String(tmp[2]);
+					mainInfo.ban_no=tmp[3];
+					mainInfo.name=tmp[4]; 
+					mainInfo.seatNumber=StringUtil.trim(tmp[5]); 
+					totalData.push(mainInfo);
+				}
+				this.dispatchEvent(new Event("studentChange")); 
+				this.comboChangeListener();
+			}
+		]]>
+	</fx:Script>
+	<s:Path data="M 0 0 L {_stageWidth-15} 0 L {_stageWidth-15} {_stageHeight-80} L 0 {_stageHeight-80} L 0 0">
+		<!--<s:Path data="M 0 0 L 1010 0 L 1010 710 L 0 710 L 0 0">-->
+		<s:stroke>
+			<s:RadialGradientStroke weight="10">
+				<s:GradientEntry color="{Math.random()*0xffffff}"/>
+				<s:GradientEntry color="{Math.random()*0xffffff}"/>
+				<s:GradientEntry color="{Math.random()*0xffffff}"/>
+			</s:RadialGradientStroke>
+		</s:stroke>
+	</s:Path>
+	<s:Group id="ui" width="100%" height="100%"/>
+	<s:Button label="Random 선택" right="30" top="20" click="randomSelListener();" fontSize="18"
+			  enabled="{randomButtonVisible}" height="30" color="#F30D39"/>
+	<s:Label text="OO 반 선택" width="180" fontSize="15" fontWeight="bold" left="12" top="12" id="banName_txt"/>
+	<s:HGroup width="100%" top="10" horizontalCenter="0" horizontalAlign="center">
+		<s:ComboBox id="sel_year" selectedIndex="0" prompt="학년 선택" change="comboYearChange();"
+					width="200" />
+		<s:Spacer width="20"/>
+		<s:ComboBox id="sel_cb" selectedIndex="0" prompt="학급 선택"  change="comboChangeListener();" width="200" />
+	</s:HGroup>
+	<s:Image source="assets/teacher.png" width="80" height="80" y="620" horizontalCenter="0"/>
+	<s:Button label="창 닫기" right="40" bottom="70" click="fnCloseHandler();" fontSize="18"
+			  color="#111111" height="30"/>
+</s:TitleWindow>

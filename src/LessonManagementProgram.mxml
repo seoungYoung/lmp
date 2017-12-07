@@ -1,0 +1,1186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					   xmlns:s="library://ns.adobe.com/flex/spark" 
+					   applicationComplete="initApp();" showStatusBar="false"
+					   xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import com.data.MainInfo;
+			import com.views.BujoMain;
+			import com.views.ExamMain;
+			import com.views.ListManageView;
+			import com.views.ScheduleView;
+			import com.views.SearchView;
+			
+			import flash.filters.BitmapFilter;
+			import flash.filters.BitmapFilterQuality;
+			import flash.filters.DropShadowFilter;
+			import flash.filters.GlowFilter;
+			import flash.net.navigateToURL;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.events.DragEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.rpc.http.HTTPService;
+			import mx.utils.StringUtil;
+			
+			import air.net.URLMonitor;
+			
+			private var totalData:Array=new Array(); // 학년 전데이터 가져오기
+			private var selClassStudent:Array; // 콤보 체인지에 의해 넣어지는 반별 데이터
+			[Bindable]
+			private var comboYearData:Array; // 학년수 comboBox의 데이터
+			[Bindable]
+			private var comboData:Array; // 학급수 comboBox의 데이터
+			[Bindable]
+			private var ac:ArrayCollection=new ArrayCollection(); // 화면에 보여지는 dataGrid의 데이터
+			[Bindable]
+			private var selName:String; // 선택학생의 이름
+			[Bindable]
+			private var imageName:String; // 선택학생의 사진
+			[Bindable]
+			private var viewNameAC:ArrayCollection; // 콤보박스에 의해 선택된 반의 학생 리스트 ArrayCollection
+			private var viewName:Array; // 콤보박스에 의해 선택된 반의 학생 리스트 배열
+			[Bindable]
+			private var _stageWidth:Number;
+			[Bindable]
+			private var _stageHeight:Number;
+			private var selectClass:Object; // 선택 반의 자료.
+			private var $file:File;
+			private var $conn:SQLConnection;
+			private var $statement:SQLStatement;
+			private var $editNo:String;
+			private var _classDataToTextSelectClass:String; // text파일로 변경할 때 반 정보 보관하는 변수
+			private var _basePath:String;
+			[Bindable]
+			private var reasonList:ArrayCollection;
+			// 외부
+			public static var _hsURL:String="http://122.37.216.171:12345";
+			public static var _musicURL:String="http://122.37.216.171:12345";
+			// 집			
+//			public static var _hsURL:String="http://192.168.219.107";
+//			public static var _musicURL:String="http://192.168.219.107";
+			
+			[Bindable]
+			private var $outCount:uint=0;
+			private var $userName:String;
+			public var publicWin:PublicListViewTitleWindow;
+			[Bindable]
+			private var _updateCheck:uint;
+			private var _currentVersion:String;
+			private var _updateVersion:String;
+			private var _monitor:URLMonitor;
+			public var _year:String;
+			private var $schoolName:String;
+			private var $address:String;
+			private var $tel:String;
+			private var $fax:String;
+			private var $numberOfClass:String;
+			
+			private function initApp(e:Event=null):void {
+//				최대화...
+//				this.stage.nativeWindow.width=_stageWidth=Screen.mainScreen.bounds.width;
+//				this.stage.nativeWindow.height=_stageHeight=Screen.mainScreen.bounds.height;
+				this.stage.nativeWindow.width=_stageWidth=1024;
+				this.stage.nativeWindow.height=_stageHeight=768;
+				
+				this.stage.nativeWindow.x=(Screen.mainScreen.bounds.width-this.stage.nativeWindow.width)/2;
+				this.stage.nativeWindow.y=(Screen.mainScreen.bounds.height-this.stage.nativeWindow.height)/2;
+				this.stage.nativeWindow.addEventListener(Event.CLOSING,closingHandler);
+				var nativeMenu:NativeMenu=new NativeMenu();
+				var mainMenu:NativeMenu=new NativeMenu();
+				
+				var userMenu:NativeMenuItem=new NativeMenuItem("사용자 정보 초기화");
+				userMenu.keyEquivalent="u";
+				userMenu.addEventListener(Event.SELECT,fnUserListener);
+				mainMenu.addItem(userMenu);
+				
+				var passwordChangeMenu:NativeMenuItem=new NativeMenuItem("비밀번호 변경");
+				passwordChangeMenu.keyEquivalent="p";
+				passwordChangeMenu.addEventListener(Event.SELECT,fnPasswordChangeListener);
+				mainMenu.addItem(passwordChangeMenu);
+				var yearChangeMenu:NativeMenuItem=new NativeMenuItem("학년도 바꾸기");
+//				yearChangeMenu.keyEquivalent="b";
+				yearChangeMenu.addEventListener(Event.SELECT,fnyearChangeMenuListener);
+				mainMenu.addItem(yearChangeMenu);
+				
+				var delMenu:NativeMenuItem=new NativeMenuItem("현재 학년 데이터 삭제");
+				delMenu.keyEquivalent="d";
+				delMenu.addEventListener(Event.SELECT,fnDelListener);
+				mainMenu.addItem(delMenu);
+				
+				var backUpMenu:NativeMenuItem=new NativeMenuItem("데이터 백업");
+				backUpMenu.keyEquivalent="b";
+				backUpMenu.addEventListener(Event.SELECT,fnBackUpListener);
+				
+				mainMenu.addItem(backUpMenu);
+
+				var restoreMenu:NativeMenuItem=new NativeMenuItem("이전 데이터 복원");
+				restoreMenu.keyEquivalent="r";
+				restoreMenu.addEventListener(Event.SELECT,fnRestoreListener);
+				mainMenu.addItem(restoreMenu);
+				var schoolInfoMenu:NativeMenuItem=new NativeMenuItem("학교 정보");
+				schoolInfoMenu.addEventListener(Event.SELECT,fnSchoolListener);
+				mainMenu.addItem(schoolInfoMenu);
+				
+				mainMenu.addItem(new NativeMenuItem("",true));
+				
+				var bujoMenu:NativeMenuItem=new NativeMenuItem("부조관리");
+//				bujoMenu.keyEquivalent="b";
+				bujoMenu.addEventListener(Event.SELECT,fnBujoListener);
+				mainMenu.addItem(bujoMenu);
+				var playerMenu:NativeMenuItem=new NativeMenuItem("음악감상");
+				playerMenu.keyEquivalent="m";
+				playerMenu.addEventListener(Event.SELECT,fnMusicPlayerListener);
+				mainMenu.addItem(playerMenu);
+				
+				mainMenu.addItem(new NativeMenuItem("",true));
+				
+				var examMenu:NativeMenuItem=new NativeMenuItem("데이터베이스 관리");
+				examMenu.keyEquivalent="e";
+				examMenu.addEventListener(Event.SELECT,fnDBManageListener);
+				mainMenu.addItem(examMenu);
+				var favMenu:NativeMenuItem=new NativeMenuItem("즐겨찾기");
+				favMenu.keyEquivalent="j";
+				favMenu.addEventListener(Event.SELECT,fnFavListener);
+				mainMenu.addItem(favMenu);
+				var versionMenu:NativeMenuItem=new NativeMenuItem("프로그램 버전 정보");
+				versionMenu.keyEquivalent="i";
+				versionMenu.addEventListener(Event.SELECT,fnVersionListener);
+				mainMenu.addItem(versionMenu);
+				var quitMenu:NativeMenuItem=new NativeMenuItem("프로그램 종료");
+				quitMenu.keyEquivalent="q";
+				quitMenu.addEventListener(Event.SELECT,quitMenuListener);
+				mainMenu.addItem(quitMenu);
+				
+				nativeMenu.addSubmenu(mainMenu,"메뉴(&H)");
+				this.stage.nativeWindow.menu=nativeMenu;
+				
+				var today:Date=new Date();
+				var year:Number=today.getFullYear();
+				var start:Date=new Date(year,2,1);
+				var end:Date=new Date(year+1,2,1);
+				if(today>start && today<end) {
+					this._year=year.toString();
+					this._basePath="com/jsy/lmp/"+this._year+"/assets/";
+				}
+				
+				this._monitor=new URLMonitor(new URLRequest(LessonManagementProgram._hsURL));
+				this._monitor.addEventListener(StatusEvent.STATUS,fnStatusHandler);
+				this._monitor.start();
+				
+				NativeApplication.nativeApplication.addEventListener(Event.ACTIVATE,activateListener);
+
+				var byteArray:ByteArray=EncryptedLocalStore.getItem("teacherUserName");
+				// 파일로 처리..
+//				var file:File=File.documentsDirectory.resolvePath("com/jsy/lmp/user.dat");
+//				if(file.exists) {
+				if(byteArray != null) {
+					this.$userName=byteArray.readUTFBytes(byteArray.length);
+//					var stream:FileStream=new FileStream();
+//					stream.open(file,FileMode.READ);
+//					var str1:String=stream.readMultiByte(stream.bytesAvailable,File.systemCharset);
+////					trace(str1);
+//					this.$userName=str1;
+//					stream.close();
+					var win:IntroInputPWTitleWindow=new IntroInputPWTitleWindow();
+					win._year=this._year;
+					win._teacherName=this.$userName;
+					win.addEventListener("passwordConfirm",loadBaseData);
+					PopUpManager.addPopUp(win,this,true);
+					PopUpManager.centerPopUp(win);
+				}
+				else {
+					var win1:IntroViewTitleWindow=new IntroViewTitleWindow();
+					win1._year=this._year;
+					win1.addEventListener("passwordSave",loadBaseData);
+					PopUpManager.addPopUp(win1,this,true);
+					PopUpManager.centerPopUp(win1);
+				}
+			}
+			
+			private function fnFavListener(e:Event):void {
+				navigateToURL(new URLRequest("http://122.37.216.171:12345/jsy_fav/index.html"));
+			}
+			private function fnMusicPlayerListener(e:Event):void {
+				var win:MusicPlayerWindow=new MusicPlayerWindow();
+				win.open();
+			}
+			private function fnyearChangeMenuListener(e:Event):void {
+				var win:YearChangeViewTitleWindow=new YearChangeViewTitleWindow();
+				win.addEventListener("yearChange",yearChangeHandler);
+				PopUpManager.addPopUp(win,this,true);
+				PopUpManager.centerPopUp(win);
+			}
+			private function yearChangeHandler(e:TextEvent):void {
+				this._basePath="com/jsy/lmp/"+e.text+"/assets/";
+				this._year=e.text;
+				this.imageName="";
+				this.banName_txt.text="";
+				this.reportTxt.text="";
+				this.advancedTxt.text="";
+				this.etcTA.text="";
+				this.ac=this.viewNameAC=new ArrayCollection();
+				this.sel_year.selectedIndex=this.sel_cb.selectedIndex=-1;
+				
+				this.title="Lesson Management Program - "+this._year+" 학년도 - "+this.$userName+" 선생님";
+				this.reasonListLoad();
+				Alert.show("학년도를 "+e.text+"년 으로 바꿨습니다.","확인",4,this,init);
+			}
+			private function fnPasswordChangeListener(e:Event):void {
+				var win:PasswordChangeTitleWindow=new PasswordChangeTitleWindow();
+				win._teacherName=this.$userName;
+				win.addEventListener("passwordChange",passwordChangeHadler);
+				PopUpManager.addPopUp(win,this,true);
+				PopUpManager.centerPopUp(win);
+			}
+			private function passwordChangeHadler(e:Event):void {
+				Alert.show("비밀번호를 변경했습니다","확인",4,this);
+			}
+			private function activateListener(e:Event):void {
+				var windows:Array=NativeApplication.nativeApplication.openedWindows;
+				for(var i:uint=0;i<windows.length;i++) {
+					windows[i].orderToFront();
+				}
+			}
+			private function fnExamListener():void {
+				var win:ExamMain=new ExamMain();
+				win._year=this._year;
+				win.type="utility";
+				win.systemChrome="standard";
+				win.open();
+			}
+			private function fnStatusHandler(e:StatusEvent):void {
+				if(this._monitor.available==false) {
+					Alert.show("서버에서 데이터를 가져올 수 없습니다.\n네트워크 점검 후 다시 실행하세요.\n프로그램을 종료합니다.","경고",4,this,closingHandler);
+				}
+			}
+			private function fnSchoolListener(e:Event):void {
+				Alert.show("학교 주소 : "+this.$address+"\n대표 전화번호 : "+this.$tel+"\nFax : "+this.$fax,"확인",4,this);
+			}
+			
+			private function fnVersionListener(e:Event):void {
+				if(this._currentVersion==this._updateVersion) {
+					Alert.show("현재 버전은 "+this._currentVersion+" 입니다.\n최신 버전입니다.","확인");
+				}
+				else {
+					Alert.show("현재 버전은 "+this._currentVersion+".\n"+this._updateVersion+" 으로 업데이트 버튼을 눌러 업데이트 하세요.","확인");
+				}
+			}
+			private function fnRestoreListener(e:Event):void {
+				var file:File=File.desktopDirectory;
+				file.addEventListener(Event.SELECT,fnRestoreSelectHandler);
+				file.browseForDirectory("복원 파일이 있는 디렉토리를 선택하세요\n(경로를 따라 com/jsy/lmp 디렉토리 선택!)");
+			}
+			private function fnRestoreSelectHandler(e:Event):void {
+				var tg:File=File.documentsDirectory.resolvePath("com/jsy/lmp/");
+				var source:File=new File(File(e.target).nativePath);
+				source.addEventListener(Event.COMPLETE,fnCompleteRestore);
+				source.copyToAsync(tg,true);
+			}
+			private function fnCompleteRestore(e:Event):void {
+				Alert.show("복원을 완료했습니다.\n프로그램을 종료합니다.\n다시 시작하세요.","확인",4,this,closingHandler);
+			}
+			private function fnBackUpListener(e:Event):void {
+				var file:File=File.desktopDirectory;
+				file.addEventListener(Event.SELECT,fnSelectHandler);
+				file.browseForDirectory("백업하고자 하는 디렉토리를 선택하세요");
+			}
+			private function fnSelectHandler(e:Event):void {
+				var source:File=File.documentsDirectory.resolvePath("com/jsy/lmp");
+				var tg:File=new File(File(e.target).nativePath+"/com/jsy/lmp/");
+				source.addEventListener(Event.COMPLETE,fnCompleteBackup);
+				source.copyToAsync(tg,true);
+			}
+			private function fnCompleteBackup(e:Event):void {
+				Alert.show("백업을 완료했습니다.","확인");
+			}
+			private function fnDelListener(e:Event):void {
+				var file:File=File.documentsDirectory.resolvePath("./com/jsy/lmp/"+this._year+"/assets");
+				file.addEventListener(Event.COMPLETE,fnDeleteDataAll);
+				file.deleteDirectoryAsync(true);
+			}
+			private function fnDeleteDataAll(e:Event):void {
+				Alert.show("모든  "+this._year+"년도의 기록된 데이터를 삭제했습니다.\n프로그램을 다시 시작하세요!","확인",4,this,this.closingHandler);
+			}
+			private function fnUserListener(e:Event):void {
+				EncryptedLocalStore.removeItem("teacherUserName");
+				Alert.show("사용자 정보를 삭제했습니다.\n프로그램을 종료합니다","확인",4,this,quitMenuListener);
+				// 파일로 처리..
+//				var file:File=File.documentsDirectory.resolvePath("com/jsy/lmp/user.dat");
+//				file.addEventListener(Event.COMPLETE,fnUserDel);
+//				file.deleteFileAsync();
+			}
+//			private function fnUserDel(e:Event):void {
+//				Alert.show("사용자 정보를 삭제했습니다.\n프로그램을 종료합니다","확인",4,this,quitMenuListener);
+//			}
+			private function quitMenuListener(e:Event=null):void {
+				NativeApplication.nativeApplication.exit();
+			}
+			private function fnBujoListener(e:Event):void {
+				var win:BujoMain=new BujoMain();
+				win.type="utility";
+				win.systemChrome="standard";
+				win.open();
+			}
+			private function loadBaseData(e:Event=null):void {
+				var byteArray:ByteArray=EncryptedLocalStore.getItem("teacherUserName");
+				this.$userName=byteArray.readUTFBytes(byteArray.length);
+				var hs:HTTPService=new HTTPService();
+				hs.url=LessonManagementProgram._hsURL+"/lmp/schoolInfo.php?year="+this._year;
+//				trace(hs.url);
+				hs.resultFormat="text";
+				hs.addEventListener(ResultEvent.RESULT,fnResultSchool);
+				hs.addEventListener(FaultEvent.FAULT,fnFault);
+				hs.send();
+			}
+			
+			private function fnResultSchool(e:ResultEvent):void {
+				var imsi:Array=String(e.result).split(",");
+				var t:Array=new Array();
+				for(var i:uint=0;i<imsi[0];i++) {
+					t.push((i+1));
+				}
+				this.comboYearData=t;
+				this.sel_year.prompt="학년 선택";
+				this.sel_year.dataProvider=this.comboYearData;
+				sel_year.setStyle("fontSize",17);
+
+				t=new Array();
+				for(i=0;i<imsi[1];i++) {
+					t.push((i+1));
+				}
+				this.comboData=t;
+				sel_cb.prompt="반 선택";
+				sel_cb.dataProvider=this.comboData;
+				sel_cb.setStyle("fontSize",17);
+				
+				this.reasonListLoad();
+				advancedTxt.setFocus();
+				advancedTxt.imeMode="KOREAN";
+				reportTxt.imeMode="KOREAN";
+				this.$numberOfClass=imsi[2];
+				this.$schoolName=imsi[3];
+				this.$address=imsi[4];
+				this.$tel=imsi[5];
+				this.$fax=imsi[6];
+				
+				init();
+			}
+			private function reasonListLoad(e:Event=null):void {
+				var file:File=File.documentsDirectory.resolvePath(this._basePath+"/progress/reasonList.dat");
+				if(file.exists) { 
+					var stream:FileStream=new FileStream();
+					stream.open(file,FileMode.READ);
+					var str1:String=stream.readMultiByte(stream.bytesAvailable,File.systemCharset);
+//					trace(str1);
+					var mStr:Array=str1.split("|||");
+					this.reasonList=new ArrayCollection(mStr);
+					stream.close();
+				}
+				else {
+					this.reasonList=new ArrayCollection(new Array());
+				}
+				this.fnLoadReasonDragHandler();
+			}
+			private function closingHandler(e:Event):void {
+				var wins:Array=NativeApplication.nativeApplication.openedWindows;
+				for(var i:uint=0;i<wins.length;i++) {
+					wins[i].close();
+				}
+			}
+			private function comboChangeListener(e:ListEvent):void {
+				//				advancedEnterListener();
+				if(this.sel_year.selectedIndex==-1) {
+					Alert.show("학년을 먼저 선택하세요.");
+					return;
+				}
+				ac=null;
+				this.fChk.selected=false;
+				this.$outCount=0;
+				editBtn.enabled=false;
+				delBtn.enabled=false;
+				saveBtn.enabled=false;
+				selName="";
+				imageName="";
+				mDate.selectedDate=new Date();
+//				trace(mDate.selectedDate);
+				mReason.selectedIndex=-1;
+				mEtc.text="";
+				var file:File=File.documentsDirectory.resolvePath(this._basePath+"/progress/"+e.currentTarget.selectedItem+".dat");
+//				var file:File=File.applicationDirectory.resolvePath("assets/progress/"+e.currentTarget.selectedItem+".dat");
+				if(file.exists) { 
+					var stream:FileStream=new FileStream();
+					stream.open(file,FileMode.READ);
+					var str1:String=stream.readMultiByte(stream.bytesAvailable,File.systemCharset);
+					var mStr:Array=str1.split("|||");
+					advancedTxt.text=mStr[0];
+					reportTxt.text=mStr[1];
+					etcTA.text=mStr[2];
+					stream.close();
+				}
+				else {
+					advancedTxt.text="";
+					reportTxt.text="";
+					etcTA.text="";
+				}
+				
+				banName_txt.text=this.sel_year.selectedLabel+"학년"+e.currentTarget.selectedItem+" 반";
+				banName_txt.setStyle("fontSize",20);
+				selClassStudent=new Array();
+				viewName=new Array();
+				for(var i:int=0;i<totalData.length;i++) {
+					var tmp:MainInfo=new MainInfo();
+					tmp=totalData[i];
+					if(tmp.year==this.sel_year.selectedLabel && tmp.ban==e.currentTarget.selectedItem) {
+						selClassStudent.push(tmp);
+						var str:String=tmp.ban_no+". "+tmp.name;
+						viewName.push(str);
+						//						trace(str);
+					}
+				}	
+				viewNameAC=new ArrayCollection(viewName);
+				this.publicDataTotalLoad();
+			}
+			private function comboYearChange():void {
+				this.sel_cb.selectedIndex=-1;
+			}
+			private function advancedEnterListener(e:FlexEvent=null):void {
+				//				trace(e.currentTarget.id);
+				if(this.sel_cb.selectedIndex==-1) {
+					Alert.show("반을 선택하세요","확인");
+					return;
+				}
+				var file:File=File.documentsDirectory.resolvePath(this._basePath+"progress/"+sel_cb.selectedItem+".dat");
+				var stream:FileStream=new FileStream();
+				stream.open(file,FileMode.WRITE);
+//				trace(advancedTxt.text);
+				var str:String=advancedTxt.text+"|||"+reportTxt.text+"|||"+etcTA.text;
+				stream.writeMultiByte(str,File.systemCharset);
+				stream.close();			
+			}
+			private function getBitmapFilter1():BitmapFilter {
+				var color:Number = 0x33CCFF;
+				var alpha:Number = 0.5;
+				var blurX:Number = 35;
+				var blurY:Number = 35;
+				var strength:Number = 2;
+				var inner:Boolean = false;
+				var knockout:Boolean = false;
+				var quality:Number = BitmapFilterQuality.HIGH;
+				
+				return new GlowFilter(color,
+					alpha,
+					blurX,
+					blurY,
+					strength,
+					quality,
+					inner,
+					knockout);
+			}
+			private function getBitmapFilter():BitmapFilter {
+				var color:Number = 0x000000;
+				var angle:Number = 45;
+				var alpha:Number = 0.8;
+				var blurX:Number = 8;
+				var blurY:Number = 8;
+				var distance:Number = 15;
+				var strength:Number = 0.65;
+				var inner:Boolean = false;
+				var knockout:Boolean = false;
+				var quality:Number = BitmapFilterQuality.HIGH;
+				return new DropShadowFilter(distance,
+					angle,
+					color,
+					alpha,
+					blurX,
+					blurY,
+					strength,
+					quality,
+					inner,
+					knockout);
+			}
+			private function fnDrop(e:DragEvent):void {
+				e.preventDefault();
+				for(var i:uint=0;i<this.reasonList.length;i++) {
+					if(List(e.currentTarget).id==("reason"+i)) {
+						SQLConnect();				
+						var order:String="insert into counseling(classNo,studentName,adviceDate,adviceReason,adviceEtc) values(";
+						order+="@classNo,@studentName,@adviceDate,@adviceReason,@adviceEtc";
+						order+=")";
+						$statement.parameters["@classNo"]=selClassStudent[list.selectedIndex]["ban_no"];
+						$statement.parameters["@studentName"]=selClassStudent[list.selectedIndex]["name"];
+						$statement.parameters["@adviceDate"]=new Date();
+						$statement.parameters["@adviceReason"]=this.reasonList[i];
+						$statement.parameters["@adviceEtc"]="";
+						$statement.text=order;
+						$statement.execute();
+						this.mReason.selectedIndex=-1;
+						this.mEtc.text="";
+						reloadData();
+						break;
+					}
+				}
+			}
+			private function fnLoadReasonDragHandler():void {
+				if(this.reasonBox.numElements!=0) {
+					this.reasonBox.removeAllElements();
+				}
+				for(var i:uint=0;i<this.reasonList.length;i++) {
+					var hGroup:HGroup=new HGroup();
+					hGroup.horizontalCenter=0;
+					hGroup.horizontalAlign="center";
+					hGroup.verticalAlign="middle";
+					var lst:List=new List();
+					lst.id="reason"+i;
+					lst.width=100;
+					lst.height=20;
+					lst.dropEnabled=true;
+					lst.addEventListener(DragEvent.DRAG_DROP,fnDrop);
+					var lbl:Label=new Label();
+					lbl.setStyle("color",0xff0000);
+					lbl.setStyle("fontWeight","bold");
+					lbl.setStyle("fontSize",16);
+					
+					lbl.text="<------   "+this.reasonList[i];
+					lbl.width=190;
+					hGroup.addElement(lst);
+					hGroup.addElement(lbl);
+					this.reasonBox.addElement(hGroup);
+				}
+			}
+			private function init(e:Event=null):void {
+				this.fnLoadReasonDragHandler();
+				// 웹 용
+				this.setElementIndex(this.sl,1);
+				var glowFilter:BitmapFilter = getBitmapFilter1();
+				var dropFilter:BitmapFilter = getBitmapFilter();
+				this.sl.filters=[glowFilter,dropFilter];
+				
+				this.sc.filters=[glowFilter];
+				this.title="Lesson Management Program - "+this._year+" 학년도 - "+this.$schoolName+". "+this.$userName+" 선생님";
+				var hs:HTTPService=new HTTPService();
+				hs.url=LessonManagementProgram._hsURL+"/lmp/loadData.php?year="+this._year;
+				hs.resultFormat="text";
+				hs.addEventListener(ResultEvent.RESULT,fnResult1);
+				hs.addEventListener(FaultEvent.FAULT,fnFault);
+				hs.send();
+				this.publicDataTotalLoad();
+				// 자체 파일 용..
+////				var file:File=File.documentsDirectory.resolvePath("com/jsy/lmp/assets/name.dat");
+//				var file:File=File.documentsDirectory.resolvePath("com/jsy/lmp/assets/name.dat");
+//				var stream:FileStream=new FileStream(); 
+//				stream.open(file,FileMode.READ);
+//				var str:String=stream.readMultiByte(stream.bytesAvailable,File.systemCharset);
+//				//			trace(stream.readMultiByte(stream.bytesAvailable,File.systemCharset));
+//				stream.close();																
+//				str=str.split("\r").join("");
+//				//			txt.text=str;
+//				var imsi:Array=new Array();
+//				imsi=str.split("\n");
+//				for(var i:uint=0;i<imsi.length-1;i++) {
+//					var tmp:Array=imsi[i].split(",");
+//					var mainInfo:MainInfo=new MainInfo();
+//					mainInfo.ban=String(tmp[0]);
+//					mainInfo.ban_no=tmp[1];
+//					mainInfo.name=tmp[2]; 
+//					totalData.push(mainInfo);
+//				}
+			}
+			private function fnFault(e:FaultEvent):void {
+//				trace(e.message);
+				Alert.show("접속에 실패했습니다.\n관리자에게 문의하세요\n프로그램을 종료합니다.","확인",4,this,quitMenuListener);
+			}
+			private function fnResult1(e:ResultEvent):void {
+//				trace(e.result);
+				var imsi:Array=String(e.result).split("\r\n");
+				for(var i:uint=0;i<imsi.length-1;i++) {
+					//					trace(tmp[i]);
+					var tmp:Array=String(imsi[i]).split("|||");
+					var mainInfo:MainInfo=new MainInfo();
+					mainInfo.year=String(tmp[1]);
+					mainInfo.ban=String(tmp[2]);
+					mainInfo.ban_no=tmp[3];
+					mainInfo.name=tmp[4]; 
+					mainInfo.seatNumber=StringUtil.trim(tmp[5]); 
+					totalData.push(mainInfo);
+				}
+				var hs:HTTPService=new HTTPService();
+				hs.url=LessonManagementProgram._hsURL+"/lmp/updateCheck.php?teacherName="+this.$userName+"&year="+this._year;
+				hs.resultFormat="text";
+				hs.addEventListener(ResultEvent.RESULT,fnResultUpdateCheck);
+				hs.addEventListener(FaultEvent.FAULT,fnFault);
+				hs.send();
+			}
+			private function fnResultUpdateCheck(e:ResultEvent):void {
+//				trace(e.result);
+				var tmp:Array=String(e.result).split("|||");
+				this._updateCheck=uint(tmp[0]);
+				this._currentVersion=tmp[1];
+				this._updateVersion=tmp[2];
+			}
+			private function changeHandler():void {
+				ac=null;
+				selectClass=sel_cb.selectedItem;
+				//				appendBtn.enabled=true;
+				editBtn.enabled=true;
+				delBtn.enabled=true;
+				saveBtn.enabled=true;
+				mDate.selectedDate=new Date();
+				//				trace(list.selectedIndex);
+				//				trace(selClassStudent[list.selectedIndex]["name"]);
+				//				trace("./assets/picture/"+selClassStudent[list.selectedIndex]["ban_no"]+"/"+selClassStudent[list.selectedIndex]["name"]+"("+selClassStudent[list.selectedIndex]["ban_no"]+").jpg");
+				var str:String=String(selClassStudent[list.selectedIndex]["name"]).substr(0,3);
+//				imageName=File.documentsDirectory.resolvePath("com/jsy/lmp/assets/picture/"+selClassStudent[list.selectedIndex]["ban"]+"/"+str+"("+selClassStudent[list.selectedIndex]["ban_no"]+").jpg").nativePath;
+				// 외부에서..
+//				imageName="http://122.37.216.171:12345/lmp/year_"+this.sel_year.selectedLabel+"/"+selClassStudent[list.selectedIndex]["ban"]+"/"+str+"("+selClassStudent[list.selectedIndex]["ban_no"]+").jpg";
+				// 집에서
+				imageName=LessonManagementProgram._hsURL+"/lmp/years/year"+this._year+"/year_"+this.sel_year.selectedLabel+"/"+selClassStudent[list.selectedIndex]["ban"]+"/"+str+"("+selClassStudent[list.selectedIndex]["ban_no"]+").jpg";
+//				trace(imageName);
+//				imageName="./assets/picture/"+selClassStudent[list.selectedIndex]["ban"]+"/"+str+"("+selClassStudent[list.selectedIndex]["ban_no"]+").jpg";
+				selName=selClassStudent[list.selectedIndex]["ban_no"]+". "+selClassStudent[list.selectedIndex]["name"];				
+				checkConfirm();
+				SQLConnect();
+				reloadData();
+			}
+			private function checkConfirm():void {
+				var tmp:String="1"+returnZeroData(selectClass.toString())+returnZeroData(selClassStudent[list.selectedIndex]["ban_no"]);
+				//				trace(tmp);
+				$file=File.documentsDirectory.resolvePath(this._basePath+"/check/");
+				if(!$file.exists) {
+					$file=File.documentsDirectory.resolvePath(this._basePath+"/check/");
+					$file.createDirectory();
+				}
+				
+				$file=File.documentsDirectory.resolvePath(this._basePath+"/check/"+tmp+".dat");
+				var stream:FileStream=new FileStream();
+				var str:String;
+				if($file.exists) { // 있으면
+					stream.open($file,FileMode.READ);
+					str=stream.readMultiByte(stream.bytesAvailable,File.systemCharset);
+					stream.close();
+					switch(str)
+					{
+						case "true":
+						{
+							fChk.selected=true;
+							break;
+						}
+						case "false":
+						{
+							fChk.selected=false;
+							break;
+						}	
+						default:
+						{
+							break;
+						}
+					}
+				}
+				else { //없으면
+					stream.open($file,FileMode.WRITE);
+					str="false";
+					stream.writeMultiByte(str,File.systemCharset);
+					stream.close();
+					fChk.selected=false;
+				}
+//				trace(str);
+			}
+			private function SQLConnect():void {
+				var tmp:String="1"+returnZeroData(selectClass.toString());
+//				var tmp:String="1"+returnZeroData(selectClass.toString())+returnZeroData(selClassStudent[list.selectedIndex]["ban_no"]);
+				//				trace(tmp);
+				$file=File.documentsDirectory.resolvePath(this._basePath+"/data/");
+				if(!$file.exists) {
+					$file=File.documentsDirectory.resolvePath(this._basePath+"/data/");
+					$file.createDirectory();
+				}
+				
+				$file=File.documentsDirectory.resolvePath(this._basePath+"/data/"+tmp+".db");
+				$conn=new SQLConnection();
+				$conn.open($file);
+				$statement=new SQLStatement();
+				$statement.sqlConnection=$conn;
+				var order:String="create table if not exists counseling (id integer primary key autoincrement,";
+				order+="classNo integer,studentName text,adviceDate date, adviceReason text,adviceEtc text";
+				order+=")";
+				$statement.text=order;
+				$statement.execute();				
+			}
+			private function reloadData(e:Event=null):void {
+				SQLConnect();
+				var order:String="select * from counseling where classNo='"+returnZeroData(selClassStudent[list.selectedIndex]["ban_no"])+"'";
+				$statement.text=order;
+				$statement.addEventListener(SQLEvent.RESULT,fnResultHandler);
+				$statement.execute();
+				this.publicDataLoad();
+			}
+			private function publicDataLoad():void {
+				var hs:HTTPService=new HTTPService();
+				var str:String="&year="+this.sel_year.selectedLabel+"&ban="+selClassStudent[list.selectedIndex]["ban"]+"&ban_no="+selClassStudent[list.selectedIndex]["ban_no"];
+				hs.url=LessonManagementProgram._hsURL+"/lmp/loadOutCountData.php?years="+this._year+str;
+				hs.resultFormat="text";
+				hs.addEventListener(ResultEvent.RESULT,fnResultOutCount);
+				hs.addEventListener(FaultEvent.FAULT,fnFault);
+				hs.send();
+			}
+			private function publicDataTotalLoad():void {
+				var hs:HTTPService=new HTTPService();
+				hs.url=LessonManagementProgram._hsURL+"/lmp/loadOutTotalCountData.php?year="+this._year;
+				hs.resultFormat="text";
+				hs.addEventListener(ResultEvent.RESULT,fnResultOutCount);
+				hs.addEventListener(FaultEvent.FAULT,fnFault);
+				hs.send();
+			}
+			private function fnResultOutCount(e:ResultEvent):void {
+//				trace(e.result);
+				this.$outCount=uint(e.result);
+//				this.nativeApplication.idleThreshold=10;
+//				this.nativeApplication.addEventListener(Event.USER_IDLE,fnUserIdle);
+//				this.nativeApplication.addEventListener(Event.USER_PRESENT,fnPresent);
+			}
+			private function fnUserIdle(e:Event):void {
+				trace("idle");
+			}
+			private function fnPresent(e:Event):void {
+				trace("present");
+			}
+			private function fnResultHandler(e:SQLEvent):void {
+				var sm:SQLStatement=e.target as SQLStatement;
+				var result:SQLResult=sm.getResult();
+				if(result!=null && result.data!=null) {
+					var array:Array=result.data;
+					ac=new ArrayCollection(array);
+				}
+				else {
+					ac=null;
+				}
+				this.mReason.selectedIndex=-1;
+				this.mEtc.text="";
+				this.dg.selectedIndex=-1;
+			}
+			private function fnDGChangeHandler():void {
+				$editNo=dg.selectedItem["id"];
+				mDate.selectedDate=new Date(ac[dg.selectedIndex]["adviceDate"]);
+				var t:uint=mReason.dataProvider.length;
+				var t1:String=ac[dg.selectedIndex]["adviceReason"];
+				for(var i:uint=0;i<t;i++) {
+					if(mReason.dataProvider.getItemAt(i)==t1) {
+						mReason.selectedIndex=i;
+						break;
+					}
+				}
+				//				=ac[dg.selectedIndex]["adviceReason"];
+				mEtc.text=ac[dg.selectedIndex]["adviceEtc"];
+			}
+			//			private function fnAppendHandler():void {
+			//				var aLabel:String="2";
+			//				var aDate:Date=mDate.selectedDate;
+			//				var aReason:String=mReason.selectedItem;
+			//				var aEtc:String=mEtc.text;
+			//				var o:Object=new Object();
+			//				o.classNo=int(aLabel);
+			//				o.adviceDate=aDate;
+			//				o.adviceReason=aReason;
+			//				o.adviceEtc=aEtc;
+			//				if(ac!=null) {
+			//					ac.addItem(o);
+			//				}
+			//				else {
+			//					var array:Array=new Array();
+			//					ac=new ArrayCollection(array);
+			//					ac.addItem(o);
+			//				}
+			//			}
+			private function returnDate(item:Object,dc:DataGridColumn):String {
+				//				trace(item.adviceDate);
+				var tmp:Date=item.adviceDate;
+				var str:String=tmp.fullYear+"-"+(tmp.month+1)+"-"+tmp.date;
+				return str;
+			}
+			private function fnSaveHandler():void {
+				SQLConnect();				
+				var order:String="insert into counseling(classNo,studentName,adviceDate,adviceReason,adviceEtc) values(";
+				order+="@classNo,@studentName,@adviceDate,@adviceReason,@adviceEtc";
+				order+=")";
+				$statement.parameters["@classNo"]=selClassStudent[list.selectedIndex]["ban_no"];
+				$statement.parameters["@studentName"]=selClassStudent[list.selectedIndex]["name"];
+				$statement.parameters["@adviceDate"]=mDate.selectedDate;
+				$statement.parameters["@adviceReason"]=mReason.selectedItem;
+				$statement.parameters["@adviceEtc"]=mEtc.text;
+				$statement.text=order;
+				$statement.execute();
+				Alert.show("저장되었습니다","확인");
+				this.mReason.selectedIndex=-1;
+				this.mEtc.text="";
+				reloadData();
+				//				trace("1"+returnZeroData(selectClass.toString())+returnZeroData(selClassStudent[list.selectedIndex]["ban_no"]));
+			}
+			private function returnZeroData(tmp:String):String {
+				if(tmp.length<2) {
+					return "0"+tmp;
+				}
+				else {
+					return tmp;
+				}
+			}
+			private function fnDeleteHandler():void {
+				SQLConnect();
+				var order:String="delete from counseling where id='"+dg.selectedItem["id"]+"'";
+				//				trace(order);
+				$statement.text=order;
+				$statement.execute();
+				Alert.show("삭제완료!!","확인");
+				reloadData();
+			}
+			private function fnEditHandler():void {
+				dateEdit();
+				reasonEdit();
+				etcEdit();
+				Alert.show("수정완료!!","확인");
+				reloadData();
+			}
+			private function etcEdit():void {
+				SQLConnect();
+				var order:String;
+				order="update counseling set adviceEtc='"+mEtc.text+"' where id='"+$editNo+"'";
+				$statement.text=order;
+				$statement.execute();
+			}
+			private function reasonEdit():void {
+				SQLConnect();
+				var order:String;
+				order="update counseling set adviceReason='"+mReason.selectedItem+"' where id='"+$editNo+"'";
+				$statement.text=order;
+				$statement.execute();
+			}
+			private function dateEdit():void {
+				SQLConnect();
+				var order:String;
+				order="update counseling set adviceDate=@adviceDate";
+				order+=" where id='"+$editNo+"'";
+				$statement.parameters["@adviceDate"]=mDate.selectedDate;
+				$statement.text=order;
+				$statement.execute();
+			}
+			private function fnCheckHandler():void {
+				var tmp:String="1"+returnZeroData(selectClass.toString())+returnZeroData(selClassStudent[list.selectedIndex]["ban_no"]);
+				//				trace(tmp);
+				$file=File.documentsDirectory.resolvePath(this._basePath+"/check/"+tmp+".dat");
+				var stream:FileStream=new FileStream();
+				stream.open($file,FileMode.WRITE);
+				
+				if(fChk.selected) {
+					stream.writeMultiByte("true",File.systemCharset);
+				}
+				else {
+					stream.writeMultiByte("false",File.systemCharset);
+				}
+				stream.close();
+			}
+			
+			private function fnClassDataToText():void {
+				if(this.sel_cb.selectedIndex==-1) {
+					Alert.show("반을 선택하세요","확인");
+				}
+				else {
+//					trace(this.sel_cb.selectedLabel);
+//					return;
+					var tmp:String="1"+returnZeroData(this.sel_cb.selectedLabel);
+					this._classDataToTextSelectClass=tmp;
+					var file:File=File.documentsDirectory.resolvePath(this._basePath+"/data/"+tmp+".db");
+					if(!file.exists) {
+						Alert.show("자료가 없습니다.","확인");
+						return;
+					}
+					
+					var conn:SQLConnection=new SQLConnection();
+					conn.open(file);
+					var statement:SQLStatement=new SQLStatement();
+					statement.sqlConnection=conn;
+					
+					var order:String="select * from counseling order by classNo asc ";
+					statement.text=order;
+					statement.addEventListener(SQLEvent.RESULT,fnResultHandler1);
+					statement.execute();
+				}
+			}
+			private function fnResultHandler1(e:SQLEvent):void {
+				var tempAc:ArrayCollection;
+				var sm:SQLStatement=e.target as SQLStatement;
+				var result:SQLResult=sm.getResult();
+				if(result!=null && result.data!=null) {
+					var array:Array=result.data;
+					tempAc=new ArrayCollection(array);
+				}
+				else {
+					tempAc=null;
+					return;
+				}
+				
+				var file:File=File.documentsDirectory.resolvePath(this._basePath+"/data/"+this._classDataToTextSelectClass+".txt");
+				var fs:FileStream=new FileStream();
+				fs.open(file,FileMode.WRITE);
+				for(var i:uint=0;i<tempAc.length;i++) {
+					var imsi:Object=tempAc.getItemAt(i);
+					var d:Date=imsi["adviceDate"] as Date;
+//					trace(d.getMonth()+1);
+					var dd:String=d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();
+					var mm:String=imsi["classNo"]+"|||"+imsi["studentName"]+"|||"+dd+"|||"+imsi["adviceReason"]+"\n";
+					fs.writeMultiByte(mm,File.systemCharset);
+				}
+				fs.close();
+				Alert.show("com/jsy/lmp/assets/data/의 "+this._classDataToTextSelectClass+".txt\n파일로 저장했습니다.","확인");
+			}
+			private function fnStudentChangeHandler(e:Event):void {
+				totalData=StudentName.totalData;
+			}
+			private function fnStudentNameView():void {
+				var win:StudentName=new StudentName();
+				win._year=this._year;
+				StudentName._stageWidth=this._stageWidth;
+				StudentName._stageHeight=this._stageHeight;
+				StudentName.totalData=this.totalData;
+				win.addEventListener("studentChange",fnStudentChangeHandler);
+				PopUpManager.addPopUp(win,this,true);
+				PopUpManager.centerPopUp(win);
+			}
+			private function viewSchedule():void {
+				var win:ScheduleView=new ScheduleView();
+				win.type="utility";
+				win.systemChrome="standard";
+				win.open();
+			}
+			private function viewSearch():void {
+				var win:SearchView=new SearchView();
+				win._year=this._year;
+				win.type="utility";
+				win.systemChrome="standard";
+				win.open();
+			}
+			private function fnDBManageListener(e:Event):void { // 디비 관리 창 열기
+				var str:String=LessonManagementProgram._hsURL+"/phpMyAdmin/";
+				navigateToURL(new URLRequest(str)); 
+//				var win:DbManageView=new DbManageView();
+//				win.open();
+			}
+			private function fnAppendHandler():void { // 사유 항목 관리 메뉴
+				var win:ListManageView=new ListManageView();
+				win._basePath=this._basePath;
+				win.type="utility";
+				win.systemChrome="standard";
+				win.addEventListener("reasonListChange",reasonListLoad);
+				win.open();
+			}
+			private function fnspeakOfOutHandler():void { //외부자료 입력하는 창.
+				var win:PublicListInsertViewTitleWindow=new PublicListInsertViewTitleWindow();
+				win._year=this._year;
+				var selectStudent:MainInfo=selClassStudent[list.selectedIndex] as MainInfo;
+				win._student=selectStudent;
+				win._teacher=this.$userName;
+				win.imageName=this.imageName;
+//				trace(win.imageName);
+				win.addEventListener("saveComplete",this.reloadData);
+				PopUpManager.addPopUp(win,this,true);
+				PopUpManager.centerPopUp(win);
+			}
+			
+			private function fnPublicContentView():void { // 기록된 외부자료 보기
+				if(this.$outCount==0) return;
+				if(this.sel_cb.selectedIndex==-1 || this.sel_year.selectedIndex==-1) {
+					return;
+				}
+				publicWin=new PublicListViewTitleWindow();
+				publicWin._year=this._year;
+				var selectStudent:MainInfo=selClassStudent[list.selectedIndex] as MainInfo;
+				publicWin._student=selectStudent;
+				publicWin.addEventListener("deleteComplete",fnDeleteComplete);
+				publicWin.addEventListener("editComplete",fnDeleteComplete);
+				PopUpManager.addPopUp(publicWin,this,true);
+				PopUpManager.centerPopUp(publicWin);
+			}
+			private function fnDeleteComplete(e:Event):void {
+//				trace("tt");
+				this.publicDataTotalLoad();
+			}
+			private function fnToDoListView():void {
+				var win:ToDoListViewTitleWindow=new ToDoListViewTitleWindow();
+				win._year=this._year;
+				PopUpManager.addPopUp(win,this,true);
+				PopUpManager.centerPopUp(win);
+			}
+			private function fnPublicOutDataTotalView():void {
+				var win:PublicListTotalViewTitleWindow=new PublicListTotalViewTitleWindow();
+				win._year=this._year;
+				PopUpManager.addPopUp(win,this,true);
+				PopUpManager.centerPopUp(win);
+			}
+			private function fnUpdateHandler():void {
+				Alert.yesLabel = "예";
+				Alert.noLabel = "아니오";
+				Alert.show("Update 버전이 있습니다.\n업데이트를 진행할까요?", "확인", Alert.YES|Alert.NO, this, alertClickHandler);
+			}
+			private function alertClickHandler(evt:CloseEvent):void {
+				if (evt.detail == Alert.YES) {
+					var hs:HTTPService=new HTTPService();
+					hs.url=LessonManagementProgram._hsURL+"/lmp/updateBoolVerion.php?teacherName="+this.$userName+"&year="+this._year;
+					hs.resultFormat="text";
+					hs.addEventListener(ResultEvent.RESULT,fnResultupdateBoolVerion);
+					hs.addEventListener(FaultEvent.FAULT,fnFault);
+					hs.send();
+				} else {
+					return;
+				}
+			}
+			private function fnProgressHandler(e:ProgressEvent):void {
+				var txt:String="Downloading update " + e.bytesLoaded + " of " + e.bytesTotal + " bytes";
+			}
+			private function fnDownloadCompleteHandler(e:Event):void {
+				var txt:String="Download Complete!";
+				var urlStream:URLStream=e.target as URLStream;
+				var file:File=File.applicationStorageDirectory.resolvePath("newVersion.air");
+				var fs:FileStream=new FileStream();
+				fs.open(file,FileMode.WRITE);
+				var bytes:ByteArray=new ByteArray();
+				urlStream.readBytes(bytes);
+				fs.writeBytes(bytes);
+				fs.close();
+				var updater:Updater=new Updater();
+				updater.update(file,this._updateVersion);
+				
+				
+			}
+			private function fnResultupdateBoolVerion(e:ResultEvent):void {
+				if(String(e.result)=="ok") {
+//					Alert.show("업데이트 완료");
+					trace("완료");
+					var stream:URLStream=new URLStream();
+					stream.addEventListener(ProgressEvent.PROGRESS,fnProgressHandler);
+					stream.addEventListener(Event.COMPLETE,fnDownloadCompleteHandler);
+					stream.load(new URLRequest(LessonManagementProgram._hsURL+"/lmp/update/LessonManagementProgram.air"));
+				}
+				else {
+					Alert.show("업데이트에 실패 했습니다.");
+					return;
+				}
+			}
+		]]>
+	</fx:Script>
+	<s:BitmapImage source="./assets/bg.jpg"/>
+	<s:Path data="M 0 0 L 1010 0 L 1010 730 L 0 730 L 0 0">
+		<s:stroke>
+			<s:LinearGradientStroke weight="10" rotation="90">
+				<s:GradientEntry color="{Math.random()*0xffffff}"/>
+				<s:GradientEntry color="{Math.random()*0xffffff}"/>
+				<s:GradientEntry color="{Math.random()*0xffffff}"/>
+			</s:LinearGradientStroke>
+		</s:stroke>
+	</s:Path>
+	<s:Label text="00  반 " width="130" fontSize="15" fontWeight="bold" left="12" top="12" id="banName_txt"/>
+	<s:Label text="수업진도 : " fontFamily="굴림" fontSize="20" color="0xff0000" fontWeight="bold" left="120" top="12"/>
+	<s:TextInput id="advancedTxt" width="150" left="220" top="12" enter="advancedEnterListener(event);"/>
+	<s:HGroup horizontalCenter="0" verticalAlign="middle" horizontalAlign="center" top="10">
+		<mx:ComboBox id="sel_year" selectedIndex="0" width="120"  change="comboYearChange();"/>
+		<s:Spacer width="30"/>
+		<mx:ComboBox id="sel_cb" selectedIndex="0" width="100" change="comboChangeListener(event);"/>
+	</s:HGroup>
+	<s:Label text="과정평가 진도 : " fontFamily="굴림"  fontSize="20" color="0xff0000" fontWeight="bold" right="220" top="12"/>
+	<s:TextInput id="reportTxt" width="150" right="50" top="12" enter="advancedEnterListener(event);"/>
+	<s:List id="list" dataProvider="{viewNameAC}" width="115" height="95%" left="10" top="50"  borderColor="0xff0000" 
+			dragEnabled="true" alternatingItemColors="[0xeeeeee, 0xffff55]" fontWeight="bold"
+			borderAlpha="0.5" change="changeHandler();">
+		<s:itemRenderer>
+			<fx:Component>
+				<s:ItemRenderer>
+					<s:HGroup verticalAlign="middle" left="7" height="25">
+						<s:Label text="{data}" fontSize="16" fontWeight="bold" fontFamily="Arial"/>
+					</s:HGroup>
+				</s:ItemRenderer>
+			</fx:Component>
+		</s:itemRenderer>
+	</s:List>
+	<mx:LinkButton label="수업 시간표 보기" fontSize="20" x="120" y="60" color="0xff0000" 
+				   fontWeight="bold" click="viewSchedule();"/>
+	<mx:LinkButton label="반 전체 좌석표 보기" x="120" y="90" fontSize="20" color="0xff0000"
+				   fontWeight="bold" click="fnStudentNameView();" />	
+	<mx:LinkButton label="학생 조회" x="340" y="60" fontSize="20" color="0xff0000"
+				   fontWeight="bold" click="viewSearch();" />	
+	<mx:LinkButton label="스케줄 목록" x="340" y="90" fontSize="20" color="0xff0000"
+				   fontWeight="bold" click="fnToDoListView();" />	
+	<s:SWFLoader source="./assets/slideImage.swf" x="170" y="160" id="sl" alpha="0.6" />
+	<s:Label text="[학급 특기 사항]" x="170" y="370" fontSize="18" fontFamily="굴림" fontWeight="bold"/>
+	<s:Button label="프로그램 업데이트" enabled="{this._updateCheck}" x="350" y="360" width="120" height="30" 
+			  click="fnUpdateHandler();"/>
+	<s:TextArea id="etcTA" x="170" y="400" width="300" height="200"/>
+	<s:Button label="반 특기사항 저장" x="170" y="610" click="advancedEnterListener();"/>
+	<mx:LinkButton label="평가항목 기록,관리" x="300" y="610" click="fnExamListener();"/>
+	<s:Button label="학급전체 데이터 Text파일로 저장(ex:total_1.dat)" x="170" y="650" click="fnClassDataToText();"/>
+	<s:Button label="항목관리" width="90" height="20" id="appendBtn" x="170" y="690" click="fnAppendHandler();"/>
+	<s:Button label="기록 외부공개" width="120" height="20" id="speakOfOutBtn" x="300" y="690" 
+			  enabled="{this.list.selectedIndex!=-1}" click="fnspeakOfOutHandler();"/>
+	<s:SkinnableContainer width="500" height="95%" top="50" right="15" id="sc"  backgroundColor="0xdddddd">
+		<s:Group width="100%" height="100%">
+			<s:Label text="학번 :" y="10" fontSize="20" x="25"/>
+			<s:Label text="{selName}" y="10" fontSize="20" x="125" color="0x0000ff"/>
+			<s:CheckBox label="1차 Check" x="250" y="50" id="fChk" change="fnCheckHandler();"/>
+			<mx:Image source="{imageName}" maintainAspectRatio="true" right="20"
+					  top="10" width="120"/>
+			<s:Form top="30" >
+				<s:FormItem label="날짜">
+					<mx:DateField id="mDate"/>
+				</s:FormItem>
+				<s:FormItem label="사유">
+					<s:DropDownList prompt="선택하세요!" dataProvider="{reasonList}" id="mReason">
+						<!--<s:dataProvider>
+							<s:ArrayCollection>
+								<fx:Object>수업태도</fx:Object>
+								<fx:Object>뒷정리미비</fx:Object>
+								<fx:Object>노트</fx:Object>
+								<fx:Object>책</fx:Object>
+								<fx:Object>입실지각</fx:Object>
+								<fx:Object>수업준비 미비</fx:Object>
+							</s:ArrayCollection>
+						</s:dataProvider>-->
+					</s:DropDownList>
+				</s:FormItem>
+				<s:FormItem label="특기사항">
+					<s:TextInput id="mEtc"/>
+				</s:FormItem>
+			</s:Form>
+			<s:Button label="수정" x="250" y="90" id="editBtn" enabled="false" click="fnEditHandler();"/>
+			<s:Button label="삭제" x="250" y="120" id="delBtn" enabled="false" click="fnDeleteHandler();"/>
+			<mx:LinkButton label="저   장" x="250" y="150" width="{delBtn.width}" color="0xff0000" 
+						   id="saveBtn" enabled="false" click="fnSaveHandler();"/>
+			<mx:DataGrid id="dg"  width="90%" height="40%" y="200" dataProvider="{ac}" editable="false"
+						 horizontalCenter="0"
+						 change="fnDGChangeHandler();">
+				<mx:columns>
+					<mx:DataGridColumn headerText="Serial No" dataField="id" width="60" textAlign="center"/>
+					<mx:DataGridColumn headerText="날짜" labelFunction="returnDate" width="100" textAlign="center"/>
+					<mx:DataGridColumn headerText="사유" dataField="adviceReason" textAlign="center" />
+					<mx:DataGridColumn headerText="기타" dataField="adviceEtc" width="100" textAlign="center"/>
+				</mx:columns>
+			</mx:DataGrid>
+		</s:Group>
+	</s:SkinnableContainer>
+	<s:SkinnableContainer width="300" height="150" bottom="50" right="80" backgroundColor="0xdddddd">
+		<s:VGroup id="reasonBox" gap="5" />
+	</s:SkinnableContainer>
+	<s:Label text="외부 공개 건수 : " x="850" y="230" fontWeight="bold"/>
+	<s:Button label="외부 공개 모두 보기" x="700" y="225" fontWeight="bold" click="fnPublicOutDataTotalView();"/>
+	<s:Label text="[ {this.$outCount} 건 ]" x="950" y="230" id="outTxt"
+			 useHandCursor="{this.$outCount>0}" color="0x0000ff" fontStyle="italic"
+			 click="fnPublicContentView();" fontWeight="bold"/>
+	<!--<s:Label text="(c) 2017, Lesson Management Program" fontFamily="굴림" fontWeight="bold" 
+			  color="0xffff00" fontSize="15" height="20" right="20" bottom="5" />-->
+	<s:SWFLoader source="./assets/typeWriter_lmp.swf" right="10" bottom="2" />
+</s:WindowedApplication>

@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" title="평가 항목 전체 보기" height="500" width="700"
+			   xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="init();" close="fnCancelhandler();"  
+			   xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import com.data.ExamInfo;
+			
+			import mx.controls.Alert;
+			import mx.managers.PopUpManager;
+			
+			[Bindable]
+			public var $data:ExamInfo;
+			private var $delNo:int;
+			
+			private function init():void {
+				this.$delNo=int(this.$data.id);
+				this.chapterTi.text=$data.chapter;
+				var d:Date=this.$data.date;
+				this.d.selectedDate=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+				this.etcTA.text=this.$data.etc;
+				this.problemTA.text=$data.problem;
+				this.viewsTA.text=$data.views;
+				if($data.attachmentFile!="") {
+					this.attachmentFileTi.text=$data.attachmentFile;
+				}
+				else {
+					this.attachmentFileDownBtn.enabled=false;
+				}
+			}
+			private function fnCancelhandler():void {
+				PopUpManager.removePopUp(this);
+			}
+			private function fnSearchHandler():void {
+				var file:File=File.desktopDirectory;
+				file.addEventListener(Event.SELECT,fnDirectorySelectListener);
+				file.browseForDirectory("내려 받을 폴더를 선택하세요.\n[운영체제 설치 된 일부 디렉토리는 불가합니다]");
+			}
+			
+			private function fnDirectorySelectListener(e:Event):void {
+				var source:File=new File(this.$data.attachmentFile);
+				var tg:File=File(e.target).resolvePath(source.name);
+				try {
+					source.addEventListener(Event.COMPLETE,fnCopyCompleteListener);
+					source.copyToAsync(tg);
+				}
+				catch(error:IOError) {
+					Alert.show("오류가 발생했습니다."+error.message,"확인");
+					return;
+				}
+			}
+			private function fnCopyCompleteListener(e:Event):void {
+				Alert.show("해당 폴더에 내려 받았습니다.","확인",4,this);
+			}
+		]]>
+	</fx:Script>
+	<s:Label text="[ 첨부 파일을 내려 받을 수 있습니다. ]" color="0xff0000" fontSize="20" fontWeight="bold"
+			 top="10" left="20" fontFamily="굴림체"/>
+	<s:FormItem label="날짜" fontSize="15"  y="60" right="50" >
+		<s:HGroup width="100%">
+			<mx:DateField id="d" editable="false" enabled="false" />
+		</s:HGroup>
+	</s:FormItem>
+	<s:Form y="60"  width="100%" >
+		<s:FormItem label="단원 " width="100%" height="55">
+			<s:TextInput id="chapterTi" width="250" borderVisible="false" editable="false" imeMode="KOREAN" />
+		</s:FormItem>
+		<s:FormItem label="문제내용" >
+				<s:TextArea id="problemTA" width="100%" borderVisible="false" editable="false"  imeMode="KOREAN" height="60"/>
+		</s:FormItem>
+		<s:FormItem label="보기 항목">
+			<s:TextArea id="viewsTA" width="100%" imeMode="KOREAN" height="50" borderVisible="false" editable="false" />
+		</s:FormItem>
+		<s:FormItem label="특기사항" width="100%">
+			<s:TextArea id="etcTA" width="100%" borderVisible="false" editable="false"  imeMode="KOREAN" height="50"/>
+		</s:FormItem>
+		<s:FormItem label="첨부파일" width="100%">
+			<s:HGroup width="100%" height="30">
+				<s:TextInput id="attachmentFileTi" width="250" editable="false" />
+				<s:Spacer width="20"/>
+				<s:Button id="attachmentFileDownBtn" label="첨부파일 내려받기" click="fnSearchHandler();"/>
+			</s:HGroup>
+		</s:FormItem>
+	</s:Form>
+	<s:Button label="창 닫기" height="20" right="10" top="10" click="fnCancelhandler();" />
+</s:TitleWindow>

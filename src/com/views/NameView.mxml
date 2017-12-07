@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Button xmlns:fx="http://ns.adobe.com/mxml/2009"
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  creationComplete="init();" skinClass="com.views.NameViewSkin">
+	<fx:Script>
+		<![CDATA[
+			import com.data.MainInfo;
+			[Bindable]
+			public var $mainInfo:MainInfo;
+			public var _tx:Number;
+			public var _ty:Number;
+			private var _speed:Number;
+			
+			private function init():void {
+				this.label=$mainInfo.ban_no+". ["+$mainInfo.name+"]";
+				this._speed=(Math.random()*30+30)/100;
+//				this.setStyle("color",Math.random()*0xffffff);
+				this.setStyle("fontSize",20);
+				this.buttonMode=true;
+//				this._tx=StudentName.positionArray[this.$no][0];
+//				this._ty=StudentName.positionArray[this.$mainInfo.seatNumber][1];
+				
+				this.addEventListener(Event.ENTER_FRAME,fnEnter);
+			}
+			private function fnEnter(e:Event):void {
+				this.x+=(this._tx-this.x)*this._speed;
+				this.y+=(this._ty-this.y)*this._speed;
+				if(Math.abs(this.x-this._tx)<2) {
+					this.x=this._tx;
+					this.y=this._ty;
+					this.removeEventListener(Event.ENTER_FRAME,fnEnter);
+				}
+			}
+		]]>
+	</fx:Script>
+</s:Button>

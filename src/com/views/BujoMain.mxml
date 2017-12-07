@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Window xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  width="800" height="600" showStatusBar="false" title="부조관리" creationComplete="init();"
+		  xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<s:RadioButtonGroup id="searchGroup" />
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import com.data.BujoInfo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.controls.advancedDataGridClasses.AdvancedDataGridColumn;
+			import mx.managers.PopUpManager;
+			public static var _ac:ArrayCollection;
+			[Bindable]
+			private var _giveTotal:Number=0;
+			[Bindable]
+			private var _takeTotal:Number=0;
+			[Bindable]
+			private var _viewData:ArrayCollection;
+			private var conn:SQLConnection; // 디비 연결
+			private var query:SQLStatement; // 디비 실행 명령
+			private var updateQuery:SQLStatement; // 디비 실행 업데이트 명령 변수
+			
+			private function init():void {
+				this.stage.nativeWindow.x=(Screen.mainScreen.bounds.width-this.stage.nativeWindow.width)/2;
+				this.stage.nativeWindow.y=(Screen.mainScreen.bounds.height-this.stage.nativeWindow.height)/2;
+				this.openDatabase(); 
+			}
+			private function openDatabase():void {
+				var file:File=File.documentsDirectory.resolvePath("./com/jsy/lmp/bujoList.db");
+				if(file.exists==false) {
+//					trace("file not exist");
+					connect(file,SQLMode.CREATE);
+					createTable();
+				}
+				else {
+					connect(file,SQLMode.UPDATE);
+					update();
+				}
+			}
+			private function update():void {
+				if(updateQuery==null) {
+					updateQuery=new SQLStatement();
+					updateQuery.addEventListener(SQLEvent.RESULT,updateComplete);
+					updateQuery.addEventListener(SQLErrorEvent.ERROR,updateFail);
+					updateQuery.sqlConnection=conn;
+				}
+				updateQuery.text="select * from bujo";
+				updateQuery.execute();
+			}
+			private function updateComplete(e:SQLEvent):void {
+				var sm:SQLStatement=e.target as SQLStatement;
+				var result:SQLResult=sm.getResult();
+				if(result!=null && result.data!=null) {
+					var array:Array=result.data; // 모든 자료 가지고 있음
+					var tmp:Array=[]; // 
+					
+					for(var i:uint=0;i<array.length;i++) {
+						var imsi:BujoInfo=new BujoInfo();
+						imsi.no=array[i].no;
+						imsi.name=array[i].name;
+						imsi.money=array[i].money;
+						imsi.reason=array[i].reason;
+						imsi.date=array[i].bDate;
+						var d:Date=array[i].bDate;
+						imsi.date1=d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();
+						imsi.giveATake=array[i].giveATake;
+						if(imsi.giveATake=="give") this._giveTotal+=Number(imsi.money);
+						else this._takeTotal+=Number(imsi.money);
+						imsi.etc=array[i].etc;
+						
+						tmp.push(imsi);
+					}
+					BujoMain._ac=new ArrayCollection(tmp);
+					this._viewData=new ArrayCollection(tmp);
+				}
+				else {
+					BujoMain._ac=new ArrayCollection();
+					this._viewData=new ArrayCollection();
+				}
+				this.takeTI.text=this.returnWonValue(this._takeTotal);
+				this.giveTI.text=this.returnWonValue(this._giveTotal);
+				infoLbl.text=this._viewData.length+" 건";
+			}
+			private function updateFail(e:SQLEvent):void {
+				trace("update Error..");
+			}
+			private function createTable():void {
+				query.text="create table bujo (no integer primary key autoincrement,name varchar(20), money varchar(20), reason varchar(100), bDate date, giveATake varchar(10), etc varchar(200));";
+				query.execute();
+			}
+			private function connect(file:File,fileMode:String):void {
+				conn=new SQLConnection();
+				conn.addEventListener(SQLEvent.OPEN,connectComplete);
+				try {
+					conn.open(file,fileMode);	
+					//					conn.open(file,fileMode,true,1024,encryptionKey);  보안 적용 오픈 방법
+				}
+				catch(e:Error) {
+					connectFail(e);	
+				}
+			}
+			private function connectComplete(e:SQLEvent):void {
+				query=new SQLStatement();
+				query.sqlConnection=conn;
+				query.addEventListener(SQLEvent.RESULT,queryResult);
+				query.addEventListener(SQLErrorEvent.ERROR,queryError);
+			}
+			private function queryResult(e:SQLEvent):void {
+				trace("query success");
+			}
+			private function queryError(e:SQLEvent):void {
+				trace("query Error");
+			}
+			private function connectFail(e:Error):void {
+				trace("connect Fail");
+			}
+			private function dataLoad():void {
+				var file:File=File.userDirectory.resolvePath("com/jsy/lmp/bujoList.dat");
+				var filedb:File=File.userDirectory.resolvePath("com/jsy/lmp/bujoList.db");
+				var conn:SQLConnection=new SQLConnection();
+				conn.open(filedb);
+				var statement:SQLStatement=new SQLStatement();
+				statement.sqlConnection=conn;
+				if(file.exists) { 
+					var stream:FileStream=new FileStream();
+					stream.open(file,FileMode.READ);
+					var str:String=stream.readMultiByte(stream.bytesAvailable,File.systemCharset);
+					//					trace(str);
+					str.replace("\r\n\r\n","\r\n");
+					var array:Array=str.split("\r\n");
+					for(var i:uint=0;i<array.length-1;i++) {
+						var tmp:Array=array[i].split("|");
+						var imsi:BujoInfo=new BujoInfo();
+						imsi.no=(i+1).toString();
+						imsi.name=tmp[1];
+						imsi.money=tmp[2];
+						imsi.reason=tmp[3];
+//						d.selectedDate.getFullYear()+"-"+(d.selectedDate.getMonth()+1)+"-"+d.selectedDate.getDate();
+						var t:Array=tmp[4].split("-");
+						imsi.date=new Date(t[0],t[1],t[2]);
+						imsi.giveATake=tmp[5];
+						imsi.etc=tmp[6];
+						var mName1:String=imsi.name;
+						var mDate1:Date=imsi.date;
+						var amount1:String=imsi.money;
+						var relation1:String=imsi.reason;
+						var giveTake1:String=imsi.giveATake;
+						var etc1:String=imsi.etc;
+						statement.text="insert into bujo(name,money,reason,bDate,giveATake,etc) " +
+							"values(@mName,@amount,@relation,@mDate,@giveTake,@etc)";
+						statement.parameters["@mName"]=mName1;
+						statement.parameters["@amount"]=amount1;
+						statement.parameters["@relation"]=relation1;
+						statement.parameters["@mDate"]=mDate1;
+						statement.parameters["@giveTake"]=giveTake1;
+						statement.parameters["@etc"]=etc1;
+						
+						statement.execute();
+					}
+				}
+				conn.close();
+			}
+			private function fnSearchHandler():void {
+				this._giveTotal=0;
+				this._takeTotal=0;
+				infoLbl.text="00 건";
+				if(this.keyTI.text=="") {
+					this._viewData=BujoMain._ac;
+					for(var i:uint=0;i<this._viewData.length;i++) {
+						var imsi:BujoInfo=new BujoInfo();
+						imsi.money=this._viewData[i].money;
+						imsi.giveATake=this._viewData[i].giveATake;
+						if(imsi.giveATake=="give") this._giveTotal+=Number(imsi.money);
+						else this._takeTotal+=Number(imsi.money);
+						imsi.etc=this._viewData[i].etc;
+					}
+					this.takeTI.text=this.returnWonValue(this._takeTotal);
+					this.giveTI.text=this.returnWonValue(this._giveTotal);
+					infoLbl.text=this._viewData.length+" 건";
+					this.insertBtn.enabled=this.editBtn.enabled=this.delBtn.enabled=true;
+					Alert.show("검색 키를 입력하세요","확인",4,this);
+					return;
+				}
+				this.insertBtn.enabled=this.editBtn.enabled=this.delBtn.enabled=false;
+				var searchHangmok:String;
+				var array:Array=new Array();
+				if(this.searchGroup.selectedValue=="이름 검색") {
+					searchHangmok="name";
+				}
+				else {
+					searchHangmok="etc";
+				}
+				var reg:RegExp=new RegExp(this.keyTI.text+"\\w*","gi");
+				for(i=0;i<BujoMain._ac.length;i++) {
+					if(String(BujoMain._ac[i][searchHangmok]).search(reg)!=-1) {
+						array.push(BujoMain._ac[i]);
+						if(BujoMain._ac[i].giveATake=="give") this._giveTotal+=Number(BujoMain._ac[i].money);
+						else this._takeTotal+=Number(BujoMain._ac[i].money);
+					}
+				}
+				this.takeTI.text=this.returnWonValue(this._takeTotal);
+				this.giveTI.text=this.returnWonValue(this._giveTotal);
+				this._viewData=new ArrayCollection(array);
+				infoLbl.text=this._viewData.length+" 건";
+			}
+			public function returnWonValue(w:Number):String {
+				var won:String=String(w);
+				var str:String="";
+				var array:Array=[];
+				var j:uint=0;
+				if(won.length<4) {
+					str=won;
+				}
+				else {
+					switch(won.length) {
+						case 4:
+							array[0]=won.substr(1,3);
+							array[1]=won.substr(0,1);
+							str=array[1]+","+array[0];
+							break;
+						case 5:
+							array[0]=won.substr(2,3);
+							array[1]=won.substr(0,2);
+							str=array[1]+","+array[0];
+							break;
+						case 6:
+							array[0]=won.substr(3,3);
+							array[1]=won.substr(0,3);
+							str=array[1]+","+array[0];
+							break;
+						case 7:
+							array[0]=won.substr(4,3);
+							array[1]=won.substr(1,3);
+							array[2]=won.substr(0,1);
+//							trace(won,array[0],array[1],array[2]);
+							str=array[2]+","+array[1]+","+array[0];
+							break;
+						case 8:
+							array[0]=won.substr(5,3);
+							array[1]=won.substr(2,3);
+							array[2]=won.substr(0,2);
+							str=array[2]+","+array[1]+","+array[0];
+							break;
+						case 9:
+							array[0]=won.substr(6,3);
+							array[1]=won.substr(3,3);
+							array[2]=won.substr(0,3);
+							str=array[2]+","+array[1]+","+array[0];
+							break;
+					}
+				}
+				return str;
+			}
+			
+			private function fnInsertHanldler():void {
+				var win:BujoInsertViewTitleWindow=new BujoInsertViewTitleWindow();
+				win.addEventListener("saveComplete",this.insertListener);
+				PopUpManager.addPopUp(win,this,true);
+				PopUpManager.centerPopUp(win);
+			}
+			private function insertListener(e:Event):void {
+				this._giveTotal=0;
+				this._takeTotal=0;
+				Alert.show("추가했습니다.","확인",4,this);
+				this.update();
+			}
+			private function fnBujoDeleteHandler():void {
+				if(dg.selectedIndex==-1) {
+					Alert.show("삭제 항목을 선택하세요.","확인",4,this);
+					return;
+				}
+				var win:BujoDeleteViewTitleWindow=new BujoDeleteViewTitleWindow();
+				win.addEventListener("deleteComplete",this.deleteListener);
+				win.$data=BujoInfo(this.dg.selectedItem);
+				PopUpManager.addPopUp(win,this,true);
+				PopUpManager.centerPopUp(win);
+			}
+			private function deleteListener(e:Event):void {
+				this._giveTotal=0;
+				this._takeTotal=0;
+				Alert.show("삭제했습니다.","확인",4,this);
+				this.update();
+			}
+			private function fnBujoEditHandler():void {
+				if(dg.selectedIndex==-1) {
+					Alert.show("수정 항목을 선택하세요.","확인",4,this);
+					return;
+				}
+				var win:BujoEditViewTitleWindow=new BujoEditViewTitleWindow();
+				win.addEventListener("editComplete",this.editListener);
+				win.$data=BujoInfo(this.dg.selectedItem);
+				PopUpManager.addPopUp(win,this,true);
+				PopUpManager.centerPopUp(win);
+			}
+			private function editListener(e:Event):void {
+				this._giveTotal=0;
+				this._takeTotal=0;
+				Alert.show("수정했습니다.","확인",4,this);
+				this.update();
+			}
+			private function myStyleFunc(data:Object,col:AdvancedDataGridColumn):Object {
+				if(data["money"]>30000) {
+					return {color:0xff0000,fontWeight:"bold"};
+				}
+				else {
+					return null;
+				}
+			}
+			private function myStyleFuncGive(data:Object,col:AdvancedDataGridColumn):Object {
+				if(data["giveATake"]=="give") {
+					return {color:0x0000ff,fontWeight:"bold"};
+				}
+				else {
+					return null;
+				}
+			}
+		]]>
+	</fx:Script>
+	<mx:AdvancedDataGrid dataProvider="{this._viewData}" id="dg" y="30" width="90%" height="70%" 
+						 alternatingItemColors="[0xeeeeee, 0xEDFFE9]" horizontalCenter="0">
+		<mx:columns>
+			<mx:AdvancedDataGridColumn headerText="No" width="50" dataField="no"/>
+			<mx:AdvancedDataGridColumn headerText="이름" width="80" dataField="name" styleFunction="myStyleFunc"/>
+			<mx:AdvancedDataGridColumn headerText="부조금액" width="100" dataField="money"/>
+			<mx:AdvancedDataGridColumn headerText="부조내역" width="100" dataField="reason"/>
+			<mx:AdvancedDataGridColumn headerText="날짜" width="100" dataField="date1"/>
+			<mx:AdvancedDataGridColumn headerText="내역" width="50" dataField="giveATake" styleFunction="myStyleFuncGive"/>
+			<mx:AdvancedDataGridColumn headerText="특기사항" width="150" dataField="etc" styleFunction="myStyleFunc" />
+		</mx:columns>
+	</mx:AdvancedDataGrid>
+	<s:Label id="infoLbl" color="0x0000ff" fontSize="15" fontWeight="bold" right="50" top="10"/>
+	<s:Label text="Key Word(입력 후 엔터)" bottom="120" color="0x0000ff" fontSize="15" fontWeight="bold" 
+			 horizontalCenter="0" />
+	<s:TextInput width="120" bottom="80" id="keyTI" horizontalCenter="0" enter="fnSearchHandler();"
+				  imeMode="KOREAN" />
+	<s:Label text="받은부조금액 : ￦" bottom="120" fontFamily="굴림체" color="0x0000ff" fontSize="15" fontWeight="bold" right="150"/>
+	<s:TextInput width="120" bottom="115" id="takeTI" fontSize="18" fontWeight="bold" editable="false" 
+				 borderVisible="false" right="10" />
+	<s:Label text="준부조금액 : ￦" bottom="80" fontFamily="굴림체" color="0x0000ff" fontSize="15" fontWeight="bold" right="150"/>
+	<s:TextInput width="120" bottom="75" id="giveTI" fontSize="18" fontWeight="bold" editable="false" 
+				 borderVisible="false" right="10" />
+	<s:Label text="자료 검색하기 Option :" fontSize="15" fontFamily="굴림체" bottom="100" fontWeight="bold" left="10" />
+	<s:VGroup bottom="80" left="200">
+		<s:RadioButton fontWeight="bold" label="이름 검색" selected="true" groupName="searchGroup"/>
+		<s:RadioButton label="특기사항 검색" fontWeight="bold" groupName="searchGroup"/>
+	</s:VGroup>
+	<s:HGroup width="80%" height="50" bottom="5" horizontalCenter="0">
+		<s:Button label="자료추가" id="insertBtn" height="25" click="fnInsertHanldler();"/>
+		<s:Spacer width="15" height="25"/>
+		<s:Button label="자료편집" height="25" id="editBtn" click="fnBujoEditHandler();"/>
+		<s:Spacer width="15" height="25"/>
+		<s:Button label="자료삭제" height="25" id="delBtn" click="fnBujoDeleteHandler();"/>
+		<s:Spacer width="90" height="25"/>
+		<s:Button label="저장하기" visible="false" color="0xff0000" fontWeight="bold" height="25"/>
+		<s:Spacer width="15" height="25"/>
+		<s:Button label="창 닫기" color="0xff0000" fontWeight="bold" height="25" click="this.close();"/>
+	</s:HGroup>
+	<!-- 기초 데이터 불러 디비 저장하는 버튼<s:Button label="loadTest" bottom="150" right="50" click="this.dataLoad();"/>-->
+</s:Window>

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" close="fnCloseHandler();"  
+			     title="::학년도 바꾸기::" height="300" width="400"
+			   xmlns:s="library://ns.adobe.com/flex/spark" backgroundColor="0xcccccc" creationComplete="init();" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:metadata="org.osmf.metadata.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Metadata>
+		[Event(name="yearChange", type="flash.events.TextEvent")]
+	</fx:Metadata>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.dataGridClasses.DataGridColumn;
+			import mx.managers.PopUpManager;
+
+			[Bindable]
+			private var ac:ArrayCollection; // 오늘 날짜의 하는 일 저장
+
+
+			private function init():void {
+				var file:File=File.documentsDirectory.resolvePath("com/jsy/lmp/");
+				var direct:Array=file.getDirectoryListing();
+				var array:Array=new Array();
+				for(var i:uint=0;i<direct.length;i++) {
+					var f:File=direct[i] as File;
+					if(f.isDirectory) {
+						array.push({"no":(i+1),"year":f.name});
+					}
+				}
+				this.ac=new ArrayCollection(array);
+			}
+			private function dgClickHandler(e:MouseEvent):void {
+				//				trace(dg.selectedItem.no);
+				var curDG:DataGrid=e.currentTarget as DataGrid;
+				if(curDG.selectedItem==null) return;
+				else {
+//					trace(curDG.selectedItem["year"]);
+					this.dispatchEvent(new TextEvent("yearChange",false,false,curDG.selectedItem["year"]));
+					this.fnCloseHandler();
+				}
+			}
+			private function fnCloseHandler():void {
+				PopUpManager.removePopUp(this);
+			}
+		]]>
+	</fx:Script>
+	<s:HGroup width="90%" height="80%" gap="10" horizontalCenter="0">
+		<s:Group width="100%" height="100%">
+			<s:Label x="30" y="10" color="0xff0000" fontSize="20" fontFamily="굴림" fontWeight="bold" text="[ 현재 기록 된 학년도 ]"/>
+			<mx:DataGrid id="dg" x="0" y="60" width="100%" height="80%" doubleClickEnabled="true"
+						 doubleClick="dgClickHandler(event);"
+						 dataProvider="{ac}" editable="false" tabIndex="5">
+				<mx:columns>
+					<mx:DataGridColumn headerText="No" dataField="no" width="50" textAlign="center"/>
+					<mx:DataGridColumn headerText="년도" dataField="year" textAlign="center" width="100" />
+				</mx:columns>
+			</mx:DataGrid>
+		</s:Group>
+	</s:HGroup>
+	<s:Label x="50" bottom="15" color="#0B06EA" fontSize="17" fontWeight="bold" text="학년도를 더블클릭 하세요!!"/>
+</s:TitleWindow>

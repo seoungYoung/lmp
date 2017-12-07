@@ -1,0 +1,436 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Window xmlns:fx="http://ns.adobe.com/mxml/2009" minimizable="false" maximizable="false"
+		  xmlns:s="library://ns.adobe.com/flex/spark"  width="700" height="350"
+		  title="Poseidon-MP3 플레이어" windowComplete="appPostion();" 
+		  creationComplete="init();" close="fnClose();" 
+		  frameRate="48" minWidth="550" minHeight="400" 
+		  showStatusBar="false"
+		  xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<s:ArrayCollection id="fileListAC" />
+		<s:RadioButtonGroup id="selectPlayWay" />
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.controls.Alert;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.rpc.http.HTTPService;
+			
+			// 재생 파일 명 리스트...
+			private var fileList:Array;
+			private var soundTrans:SoundTransform;
+			private var channel:SoundChannel; // 재생 종료 등을 위한 soundChannel
+			private var p:int=0; //재생 사운드의 position을 가지고 있는 변수
+			private var sound:Sound; // 각 사운드 클래스
+			private var loadBar:Sprite; // 사운드 로딩시 화면에 보여주기 위한 sprite
+			private var playBar:Sprite; // 사운드 재생 시 위치 표시를 위한 바..
+			private var soundLength:Number=0; // 로딩한 사운드의 전체 재생시간을 가지고 있는 값...밀리세컨드
+			private var isPlaying:Boolean=false;  //사용 않는 값..예비..
+			private var lPeak:Sprite; // 왼쪽 스피커
+			private var rPeak:Sprite;// 오른쪽 스피커
+			[Bindable]
+			private var _listCount:String;
+			[Bindable]
+			private var playbackPercent:uint=0; // 재생 퍼센트 표시 값.
+			private var _pc:Boolean=false;
+			
+			private function initApp():void {
+				this.stage.addEventListener(KeyboardEvent.KEY_DOWN,fnKeyDownHandler);
+				stageLoad();
+			}
+			private function fnKeyDownHandler(e:KeyboardEvent):void {
+				if(e.altKey && e.keyCode==Keyboard.X) this.close();
+			}
+			private function check(e:MouseEvent):void {
+				e.currentTarget.setStyle("backgroundColor","#"+(Math.random()*0xffffff).toString(16));
+			}
+			private function appPostion():void {
+				var rect:Rectangle=Screen.mainScreen.visibleBounds;
+				this.nativeWindow.x=(rect.width-this.stage.width)/2;
+				this.nativeWindow.y=100;
+				this.initApp();
+			}
+			
+			private function fnLoadComplete(e:Event):void {
+				this.fileList=new Array();
+				var us:URLStream=e.target as URLStream;
+				while(us.bytesAvailable) {
+					//					trace(us.readUTFBytes(us.bytesAvailable));
+					var lst:String=us.readUTFBytes(us.bytesAvailable);
+					var array:Array=lst.split("\r\n");
+					array.pop();
+					for(var i:uint=0;i<array.length;i++) {
+//						trace(array[i]);
+						var o:Object={"name":array[i]};
+						this.fileList.push(o);
+					}
+				}
+				this.fileListAC=new ArrayCollection(this.fileList);
+				this._listCount=this.fileListAC.length.toString();
+			}
+			private function stageLoad():void {
+				channel=new SoundChannel();
+				loadBar=this.drawBar(0xff0000);
+				loadBar.x=120;
+				loadBar.y=100;
+				this.stage.addChild(this.loadBar);
+				this.playBar=this.drawBar(0x0000ff);
+				this.playBar.x=120;
+				this.playBar.y=150;
+				this.stage.addChild(this.playBar);
+				lPeak=drawBar(0x0000ff);
+				lPeak.rotation=-90;
+				lPeak.x=316;
+				lPeak.y=375;
+				this.stage.addChild(lPeak);
+				rPeak=drawBar(0xff0000);
+				rPeak.rotation=-90;
+				rPeak.x=408;
+				rPeak.y=375;
+				this.stage.addChild(rPeak);
+				/* for(var i:uint=0;i<this.fileList.length;i++) {
+				var btn:Button=new Button();
+				btn.label=this.fileList[i];
+				btn.name=i.toString();
+				btn.x=10+200*i;
+				btn.addEventListener(MouseEvent.CLICK,clickListener);
+				this.addElement(btn);
+				} */
+				this.setElementIndex(this.voiImage,1);
+				this.thumb.addEventListener(MouseEvent.MOUSE_DOWN,fnDragHandler);
+				this.thumb.addEventListener(MouseEvent.MOUSE_UP,fnUpHandler);
+				this.lImage.mask=this.lPeak;
+				this.rImage.mask=this.rPeak;
+				
+				var hs:HTTPService=new HTTPService();
+				hs.url=LessonManagementProgram._musicURL+"/music/fileListOld.php";
+				trace(hs.url);
+				hs.resultFormat="text";
+				hs.addEventListener(ResultEvent.RESULT,fnResultTeacher);
+				hs.addEventListener(FaultEvent.FAULT,fnFault);
+				hs.send();
+			}
+			private function fnResultTeacher(e:ResultEvent):void {
+				if(e.result=="ok") {
+					var req:URLRequest=new URLRequest(LessonManagementProgram._musicURL+"/music/playListOld.dat");
+					var us:URLStream=new URLStream();
+					us.addEventListener(Event.COMPLETE,fnLoadComplete);
+					us.load(req);
+				}
+				else {
+					Alert.show("파일 목록을 가져오는 데 실패했습니다.","확인",4,this);
+				}
+			}
+			private function fnFault(e:FaultEvent):void {
+				//				trace(e.message);
+				Alert.show("접속에 실패했습니다.\n관리자 문의하세요","확인",4,this);
+			}
+
+			private function updatePeakMeters():void {
+				lPeak.scaleX=channel.leftPeak*100;
+				rPeak.scaleX=channel.rightPeak*100;
+			}
+			private function fnDragHandler(e:MouseEvent):void {
+				this.removeEventListener(Event.ENTER_FRAME,fnEnter);
+				this.thumb.startDrag(false,new Rectangle(110,202,300,0));
+			}
+			private function fnUpHandler(e:MouseEvent):void {
+				this.stopDrag();
+				SoundMixer.stopAll();
+				//비례식을 통한 현재 재생 위치 값 찾기
+				var postion:Number=this.thumb.x-110;
+				p=postion*this.soundLength/300;
+				channel=sound.play(p);
+				channel.addEventListener(Event.SOUND_COMPLETE,fnSoundCompleHandler);
+				this.addEventListener(Event.ENTER_FRAME,fnEnter);
+			}
+			private function fnEnter(e:Event):void {
+				var estimatedLength:int=Math.ceil(sound.length / (sound.bytesLoaded / sound.bytesTotal)); 
+				playbackPercent= 100 * (channel.position / estimatedLength);
+				this.thumb.x=300*(channel.position/this.soundLength)+110;
+				this.playBar.width=300*(channel.position/this.soundLength);
+				updatePeakMeters();
+			}
+			private function drawBar(col:uint):Sprite {
+				var bar:Sprite=new Sprite();
+				var g:Graphics=bar.graphics;
+				g.beginFill(col);
+				g.drawRect(0,0,1,10);
+				g.endFill();
+				return bar;
+			}
+			// 원하는 재생 사운드 버튼을 클릭시 처리하는 매소드..
+			private function clickListener(e:MouseEvent):void {
+				SoundMixer.stopAll();
+				this.playBtn.enabled=false;
+				this.pauseBtn.enabled=false;
+				this.stopBtn.enabled=false;
+				p=0;
+				this.thumb.x=110;
+				this.loadBar.width=0;
+				this.playBar.width=0;
+				//				var str:String="assets/040301 "+e.currentTarget.label+".mp3";
+				//				var str:String="assets/"+this.fileList[e.currentTarget.selectedItem];
+				var req:URLRequest=new URLRequest(LessonManagementProgram._musicURL+"/music/"+this.fileList[e.currentTarget.selectedItem]);
+				//				var req:URLRequest=new URLRequest("http://192.168.219.106/music/"+playList[int(Math.random()*playList.length)]);
+				//				var str:String="assets/"+File(this.list.selectedItem).name;
+				//				var str:String="assets/040301 도원결의1.mp3";			
+				
+				sound=new Sound();
+				sound.load(req);
+				sound.addEventListener(Event.COMPLETE,fnComp);
+				sound.addEventListener(IOErrorEvent.IO_ERROR,fnError);
+				sound.addEventListener(ProgressEvent.PROGRESS,fnProgress);
+				channel.addEventListener(Event.SOUND_COMPLETE,fnSoundCompleHandler);
+				
+			}
+			
+			private function changeHandler():void {
+				this.subject.text=this.list.selectedItem.name;
+				SoundMixer.stopAll();
+				this.playBtn.enabled=false;
+				this.pauseBtn.enabled=false;
+				this.stopBtn.enabled=false;
+				p=0;
+				this.thumb.x=110;
+				this.loadBar.width=0;
+				this.playBar.width=0;
+				if(this._pc) {
+					var req:URLRequest=new URLRequest((this.list.selectedItem).name);
+				}
+				else {
+					req=new URLRequest(LessonManagementProgram._musicURL+"/music/"+(this.list.selectedItem).name);
+				}
+				//				var str:String="assets/"+File(this.list.selectedItem).name;
+				sound=new Sound();
+				sound.load(req);
+				sound.addEventListener(Event.COMPLETE,fnComp);
+				sound.addEventListener(IOErrorEvent.IO_ERROR,fnError);
+				sound.addEventListener(ProgressEvent.PROGRESS,fnProgress);
+			}
+			// 재생 사운드 완료시
+			private function fnSoundCompleHandler(e:Event):void {
+				trace("완료");
+				p=0;
+				this.playBar.width=0;
+				this.removeEventListener(Event.ENTER_FRAME,fnEnter);
+				if(this.continuePlay.selected) {
+					SoundMixer.stopAll();
+					this.playBtn.enabled=false;
+					this.pauseBtn.enabled=false;
+					this.stopBtn.enabled=false;
+					p=0;
+					this.thumb.x=110;
+					this.loadBar.width=0;
+					this.playBar.width=0;
+					if(this.randomPlay) {
+						this.list.selectedIndex=int(Math.random()*this.fileListAC.length);
+					}
+					else {
+						this.list.selectedIndex++;
+					}
+					var req:URLRequest=new URLRequest(LessonManagementProgram._musicURL+"/music/"+(this.list.selectedItem).name);
+					sound=new Sound();
+					sound.load(req);
+					sound.addEventListener(Event.COMPLETE,fnComp);
+					sound.addEventListener(IOErrorEvent.IO_ERROR,fnError);
+					sound.addEventListener(ProgressEvent.PROGRESS,fnProgress);
+					this.subject.text=this.list.selectedItem["name"];
+					channel.addEventListener(Event.SOUND_COMPLETE,fnSoundCompleHandler);
+				}
+				else {
+					channel.stop();
+					channel.removeEventListener(Event.SOUND_COMPLETE,fnSoundCompleHandler);
+				}
+			}
+			private function fnProgress(e:ProgressEvent):void {
+				this.loadBar.width=300*(e.bytesLoaded/e.bytesTotal);
+			}
+			private function fnError(e:IOErrorEvent):void {
+				Alert.show("파일을 읽는 중 오류 발생..\n제작자에게 문의하세요.","확인",4,this);
+			}
+			// 로딩 완료시 처리해야 할 일...
+			private function fnComp(e:Event):void {
+				this.soundLength=sound.length;
+				this.playBtn.enabled=true;
+				this.pauseBtn.enabled=false;
+				this.stopBtn.enabled=false;
+				if(this.continuePlay.selected) {
+					this.playListener();
+					this.playBtn.dispatchEvent(new MouseEvent(MouseEvent.CLICK));
+				}
+			}
+			private function playListener():void {
+				this.playBtn.enabled=false;
+				this.pauseBtn.enabled=true;
+				this.stopBtn.enabled=true;
+				channel=sound.play(p);
+				channel.addEventListener(Event.SOUND_COMPLETE,fnSoundCompleHandler);
+				this.addEventListener(Event.ENTER_FRAME,fnEnter);
+			}
+			private function pauseListener():void {
+				this.playBtn.enabled=true;
+				this.pauseBtn.enabled=false;
+				this.stopBtn.enabled=true;
+				SoundMixer.stopAll();
+				p=channel.position;
+				channel.stop();
+				this.removeEventListener(Event.ENTER_FRAME,fnEnter);
+			}
+			private function stopListener():void {
+				this.playBtn.enabled=true;
+				this.pauseBtn.enabled=false;
+				this.stopBtn.enabled=false;
+				SoundMixer.stopAll();
+				p=0;
+				channel.stop();
+				this.playBar.width=0;
+				this.removeEventListener(Event.ENTER_FRAME,fnEnter);
+				this.thumb.x=110;
+				this.playbackPercent=0;
+				this.lPeak.scaleX=this.rPeak.scaleX=0;
+			}
+			private function changeVolumeListener():void {
+				this.soundTrans=channel.soundTransform;
+				this.soundTrans.volume=vol.value/100;
+				channel.soundTransform=this.soundTrans;
+			}
+			private function changePanListener():void {
+				this.soundTrans=channel.soundTransform;
+				this.soundTrans.pan=pan.value/100;
+				channel.soundTransform=this.soundTrans;
+			}
+			private function initializeListener():void {
+				this.soundTrans=channel.soundTransform;
+				this.soundTrans.pan=0;
+				this.soundTrans.volume=1;
+				channel.soundTransform=this.soundTrans;
+				this.vol.value=100;
+				this.pan.value=0;
+			}
+			private function fnClose():void {
+				this.stopListener();
+				this.nativeWindow.close();
+			}
+			private var randomPlay:Boolean;
+			private function fnPlayWayHandler():void {
+//				trace(this.selectPlayWay.selection,this.selectPlayWay.selectedValue);
+				if(this.selectPlayWay.selectedValue=="순서대로 재생") {
+//					trace("random");
+					this.randomPlay=true;
+				}
+				else if(this.selectPlayWay.selectedValue=="무작위 재생") {
+//					trace("순서");
+					this.randomPlay=false;
+				}
+			}
+			private function fnPCHandler():void {
+				var file:File=File.desktopDirectory;
+				file.addEventListener(Event.SELECT,fnDirectorySelectListener);
+				file.browseForDirectory("음악파일이 있는 폴더를 선택하세요");
+			}
+			private function fnDirectorySelectListener(e:Event):void {
+				var source:File=(e.target) as File;
+				source.addEventListener(FileListEvent.DIRECTORY_LISTING,fileListListener);
+				source.getDirectoryListingAsync();
+			}
+			private function fileListListener(e:FileListEvent):void {
+				this.fileList=new Array();
+				var array:Array=e.files;
+				for(var i:uint=0;i<array.length;i++) {
+					var f:File=array[i] as File;
+//					trace(f.name,f.nativePath);
+					if(f.extension=="mp3") {
+						var o:Object={"name":f.nativePath};
+						this.fileList.push(o);
+					}
+				}
+				this.fileListAC=new ArrayCollection(this.fileList);
+				this._listCount=this.fileListAC.length.toString();
+				this._pc=true;
+			}
+		]]>
+	</fx:Script>
+	<s:Label x="5" text="Sound 로딩 Bar" fontWeight="bold" id="loadingLbl" y="100"/>
+	<s:Label x="5" fontWeight="bold" text="현재 재생 위치" fontFamily="굴림"  id="playLbl" y="150"/>
+	<s:Rect x="120" y="100" width="300" height="10">
+		<s:stroke>
+			<s:SolidColorStroke color="0x000000" weight="2"/>
+		</s:stroke>
+	</s:Rect>
+	<s:Rect x="120" y="150" width="300" height="10">
+		<s:stroke>
+			<s:SolidColorStroke color="0xff0000" weight="2"/>
+		</s:stroke>
+	</s:Rect>
+	<s:Label x="5" y="200" fontSize="13" text="재생위치조절" fontWeight="bold"
+			 textDecoration="none" fontFamily="굴림" />
+	<s:Rect x="110" y="200" width="320" height="20">
+		<s:stroke>
+			<s:SolidColorStroke color="0xff0000" weight="2"/>
+		</s:stroke>
+		<s:fill>
+			<s:SolidColor color="0x00ff00"/>
+		</s:fill>
+	</s:Rect>
+	<s:Group id="thumb" x="110" y="202" useHandCursor="true" buttonMode="true">
+		<s:Rect width="20" height="16">
+			<s:fill>
+				<s:SolidColor color="0x000000" alpha=".1"/>
+			</s:fill>
+		</s:Rect>
+		<s:Rect y="10" width="20" height="6">
+			<s:fill>
+				<s:SolidColor color="0x000000" />
+			</s:fill>
+		</s:Rect>
+		<s:Line xFrom="10" xTo="2" yFrom="0" yTo="10">
+			<s:stroke>
+				<s:SolidColorStroke color="0x000000" weight="3" caps="square"/>
+			</s:stroke>
+		</s:Line>
+		<s:Line xFrom="10" xTo="18" yFrom="0" yTo="10">
+			<s:stroke>
+				<s:SolidColorStroke color="0x000000" weight="3" caps="square"/>
+			</s:stroke>
+		</s:Line>
+	</s:Group>
+	<s:Label x="250" y="230" fontSize="15" fontWeight="bold" color="0x99cc00" text="{this.playbackPercent} %" />
+	<s:Label x="35" fontWeight="bold" text="곡 제목 :" fontFamily="굴림" y="50" fontSize="15" color="0xff0000"/>
+	<s:TextInput id="subject" x="100" y="47" text="음악 감상" width="300" borderVisible="false" 
+				  editable="false"/>
+	<s:Button label="내 컴퓨터에서.." top="2" left="100" fontSize="17" fontFamily="굴림" fontWeight="bold"
+			   height="30" click="fnPCHandler();"/>
+	<s:Label right="40" color="0x0000aa" fontSize="17" fontFamily="굴림" fontWeight="bold"
+			 text="재생 파일 리스트(전체:{this._listCount}곡)" textDecoration="underline"/>
+	<s:List dataProvider="{this.fileListAC}" id="list" right="10" top="30"
+			labelField="name" width="250" borderVisible="false"
+			height="65%" change="changeHandler();"/>
+	
+	<s:Label x="80" fontWeight="bold" text="볼륨 조절" y="280" color="0xff0000"/>
+	<s:HSlider minimum="0" maximum="100" id="vol" changeEnd="changeVolumeListener();"  
+			   value="100" x="140" y="280"/>
+	<s:Label x="250" fontWeight="bold" text="스피커조절" y="280" color="0xff0000"/>
+	<s:HSlider minimum="-100" maximum="100" id="pan" changeEnd="changePanListener();"  
+			   value="0" x="315" y="280"/>
+	<s:Button  label="Reset(볼륨과팬)" x="200" y="320" click="initializeListener();"/>
+	<s:Image x="315" y="295" id="lImage" height="80" source="panBar.png"/>
+	<s:Image x="407" y="295" id="rImage" height="80" source="panBar.png"/>
+	<s:Label x="312" y="264" fontSize="20" fontWeight="bold" text="L"/>
+	<s:Label x="403" y="264" fontSize="20" fontWeight="bold" text="R"/>
+	<s:Image x="140" id="voiImage" y="260" scaleX="1.2"  source="volImage.png"/>
+	<s:Label x="137" y="253" text="0"/>
+	<s:Label x="222" y="253" text="100"/>
+	
+	<s:CheckBox label="연속 재생" id="continuePlay" y="280" right="100" selected="true" />
+	<s:RadioButton groupName="selectPlayWay" visible="{continuePlay.selected}" label="순서대로 재생" 
+				   selected="true"  y="310" right="120" change="fnPlayWayHandler();" />
+	<s:RadioButton groupName="selectPlayWay" visible="{continuePlay.selected}"  label="무작위 재생" 
+				   y="340" right="132" change="fnPlayWayHandler();"/>
+	
+	<s:ToggleButton label="Play" enabled="false" left="20" bottom="10" id="playBtn" click="playListener();"/>
+	<s:ToggleButton label="Pause" enabled="false"  bottom="10" id="pauseBtn" x="{this.playBtn.x+this.playBtn.width+50}" 
+					click="pauseListener();"/>
+	<s:ToggleButton label="Stop" bottom="10" enabled="false"  click="stopListener();" id="stopBtn" right="20"/>
+</s:Window>

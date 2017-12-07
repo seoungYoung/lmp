@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Window xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark"  
+		  width="500" height="400" showStatusBar="false" title="학생 찾기" creationComplete="init();"
+		  xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import com.data.MainInfo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.rpc.http.HTTPService;
+			
+			import caurina.transitions.Tweener;
+			[Bindable]
+			private var _ac:ArrayCollection;
+			[Bindable]
+			private var $cnt:uint=0;
+			public var _year:String;
+			
+			private function init():void {
+				this.stage.nativeWindow.x=(Screen.mainScreen.bounds.width-this.stage.nativeWindow.width)/2;
+				this.stage.nativeWindow.y=(Screen.mainScreen.bounds.height-this.stage.nativeWindow.height)/2;
+				this.nameTxt.setFocus();
+			}
+			private function fnSearchListener():void {
+				var hs:HTTPService=new HTTPService();
+				var year:String;
+				if(this.yearTxt.selectedIndex==-1 || this.yearTxt.selectedIndex==0) {
+					year="all";
+				}
+				else year=String(this.yearTxt.selectedItem.ingredient).substr(0,1);
+				hs.url=LessonManagementProgram._hsURL+"/lmp/studentSearch.php?year="+year+"&name="+this.nameTxt.text+"&years="+this._year;
+				trace(hs.url);
+				hs.resultFormat="text";
+				hs.addEventListener(ResultEvent.RESULT,fnResult1);
+				hs.addEventListener(FaultEvent.FAULT,fnFault);
+				hs.send();
+			}
+			private function fnFault(e:FaultEvent):void {
+//				trace(e.message);
+				Alert.show("접속에 실패했습니다.\n관리자 문의하세요");
+			}
+			
+			private function fnResult1(e:ResultEvent):void {
+//				trace(e.result);
+				var imsi:Array=String(e.result).split("\r\n");
+				this.$cnt=imsi.length-1;
+				var assa:Array=new Array();
+				for(var i:uint=0;i<imsi.length-1;i++) {
+					//					trace(tmp[i]);
+					var tmp:Array=String(imsi[i]).split("|||");
+					var mainInfo:MainInfo=new MainInfo();
+					mainInfo.year=String(tmp[1]);
+					mainInfo.ban=String(tmp[2]);
+					mainInfo.ban_no=tmp[3];
+					mainInfo.name=tmp[4]; 
+					assa.push(mainInfo);
+				}
+				this._ac=new ArrayCollection(assa);				
+			}
+			private function fnPictureView():void {
+				this.loadPicture(this.dg.selectedItem.name);
+			}
+			private function loadPicture(str:String):void {
+				var fileName:String=LessonManagementProgram._hsURL+"/lmp/years/year"+this._year+"/year_"+this.dg.selectedItem.year+"/"+this.dg.selectedItem.ban+"/"+str+"("+this.dg.selectedItem.ban_no+")"+".jpg";
+				var win:RandomSelectView=PopUpManager.createPopUp(this,RandomSelectView,true) as RandomSelectView;
+				win.title=this.dg.selectedItem.year+"-"+this.dg.selectedItem.ban+"반 "+this.dg.selectedItem.ban_no+". "+this.dg.selectedItem.name;
+				win._image=fileName;
+				PopUpManager.centerPopUp(win);		
+				win.alpha=0;
+				Tweener.addTween(win, {alpha:1, time:3});
+			}
+			[Bindable]
+			public var complexDP:ArrayCollection = new ArrayCollection(
+				[  {ingredient:"전 학년"},  {ingredient:"1학년"}, 
+					{ingredient:"2학년"}, 
+					{ingredient:"3학년"}
+				]);
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" top="20" left="20" verticalAlign="middle" >
+		<s:Label text="학년"/>
+		<s:ComboBox  prompt="학년 선택"
+			id="yearTxt" 
+			dataProvider="{complexDP}" 
+			width="100" 
+			selectedIndex="-1" 
+			labelField="ingredient"/>
+		<s:Label text="이름"/>
+		<s:TextInput id="nameTxt" width="120" imeMode="KOREAN" enter="fnSearchListener();"/>
+		<s:Button label="검색" click="fnSearchListener();"/>
+	</s:HGroup>
+	<s:Label text="조회 결과 : {this.$cnt}건" fontSize="20" fontWeight="bold" color="0x333333" horizontalCenter="0" y="60"/>
+	<s:DataGrid y="80" width="90%" height="70%" dataProvider="{this._ac}" horizontalCenter="0" 
+				alternatingRowColors="[0xeeeeee, 0xEDFFE9]"
+				doubleClick="fnPictureView();" id="dg" doubleClickEnabled="true">
+		<s:columns >
+			<s:ArrayList>
+				<s:GridColumn headerText="학년" width="50" >
+					<s:itemRenderer>
+						<fx:Component>
+							<s:GridItemRenderer>
+								<s:Label text="{data.year}" height="20"/>
+							</s:GridItemRenderer>
+						</fx:Component>
+					</s:itemRenderer>
+				</s:GridColumn>
+				<s:GridColumn headerText="반" width="50">
+					<s:itemRenderer>
+						<fx:Component>
+							<s:GridItemRenderer>
+								<s:Label text="{data.ban}"/>
+							</s:GridItemRenderer>
+						</fx:Component>
+					</s:itemRenderer>
+				</s:GridColumn>
+				<s:GridColumn headerText="번호" width="50">
+					<s:itemRenderer>
+						<fx:Component>
+							<s:GridItemRenderer>
+								<s:Label text="{data.ban_no}"/>
+							</s:GridItemRenderer>
+						</fx:Component>
+					</s:itemRenderer>
+				</s:GridColumn>
+				<s:GridColumn headerText="이름">
+					<s:itemRenderer>
+						<fx:Component>
+							<s:GridItemRenderer>
+								<s:Label text="{data.name}"/>
+							</s:GridItemRenderer>
+						</fx:Component>
+					</s:itemRenderer>
+				</s:GridColumn>
+			</s:ArrayList>
+		</s:columns>
+	</s:DataGrid>
+</s:Window>

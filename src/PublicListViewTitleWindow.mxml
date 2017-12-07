@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" close="fnCloseHandler();" title="외부자료 보기"  
+			     height="500" width="600"
+			   xmlns:s="library://ns.adobe.com/flex/spark" backgroundColor="0xcccccc" creationComplete="init();" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:metadata="org.osmf.metadata.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Metadata>
+		[Event(name="deleteComplete", type="flash.events.Event")]
+		[Event(name="editComplete", type="flash.events.Event")]
+	</fx:Metadata>
+	<fx:Script>
+		<![CDATA[
+			import com.data.MainInfo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.rpc.http.HTTPService;
+			[Bindable]
+			public var _student:MainInfo;
+			public var _year:String;
+			[Bindable]
+			public var _ac:ArrayCollection;
+			[Bindable]
+			public static var imageName:String; // 선택학생의 사진
+
+			private function init():void {
+				this.nameLbl.text=this._student.year+"학년 "+this._student.ban+"반 "+this._student.ban_no+"번"+this._student.name;
+				imageName=LessonManagementProgram._hsURL+"/lmp/years/year"+this._year+"/year_"+_student.year+"/"+_student["ban"]+"/"+_student.name+"("+_student["ban_no"]+").jpg";
+				this.loadData();
+			}
+			public function loadData():void {
+				var hs:HTTPService=new HTTPService();
+				var str:String="&year="+_student.year+"&ban="+_student["ban"]+"&ban_no="+_student["ban_no"];
+				hs.url=LessonManagementProgram._hsURL+"/lmp/loadOutData.php?years="+this._year+str;
+				hs.resultFormat="text";
+				hs.addEventListener(ResultEvent.RESULT,fnResultOut);
+				hs.addEventListener(FaultEvent.FAULT,fnFault);
+				hs.send();
+			}
+			private function fnResultOut(e:ResultEvent):void {
+				var imsi:Array=String(e.result).split("\r\n\r\n");
+				var assa:Array=new Array();
+				for(var i:uint=0;i<imsi.length-1;i++) {
+					//					trace(tmp[i]);
+					var tmp:Array=String(imsi[i]).split("|||");
+					var o:Object={"id":tmp[0],"content":tmp[1],"writer":tmp[2],"pw":tmp[3],"recordDate":tmp[4]};
+					assa.push(o);
+				}
+				this._ac=new ArrayCollection(assa);		
+			}
+			private function fnCloseHandler():void {
+				PopUpManager.removePopUp(this);
+			}
+			private function fnFault(e:FaultEvent):void {
+				//				trace(e.message);
+				Alert.show("접속에 실패했습니다.\n관리자 문의하세요");
+			}
+		]]>
+	</fx:Script>
+	<s:Label id="nameLbl" fontSize="20" fontWeight="bold" x="30" y="50" />
+	<mx:Image source="{imageName}" maintainAspectRatio="true" right="30"
+			  top="10" width="90"/>
+	<s:DataGrid id="dg" y="140" width="90%" height="60%" dataProvider="{this._ac}" horizontalCenter="0"
+				alternatingRowColors="[0xeeeeee, 0xEDFFE9]" >
+		<s:columns >
+			<s:ArrayList>
+				<s:GridColumn headerText="게시 내용" width="280"  >
+					<s:itemRenderer>
+						<fx:Component>
+							<s:GridItemRenderer>
+								<s:TextArea text="{data.content}" id="ta" height="100%" editable="false" width="100%"/>
+							</s:GridItemRenderer>
+						</fx:Component>
+					</s:itemRenderer>
+				</s:GridColumn>
+				<s:GridColumn headerText="기록교사 및 날짜" >
+					<s:itemRenderer>
+						<fx:Component>
+							<s:GridItemRenderer >
+								<s:VGroup width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+									<s:Label text="{data.writer} 선생님" fontWeight="bold"/>
+									<s:Label text="[{data.recordDate}]"  fontWeight="bold"/>
+								</s:VGroup>
+							</s:GridItemRenderer>
+						</fx:Component>
+					</s:itemRenderer>
+				</s:GridColumn>
+				<s:GridColumn headerText="수정,삭제" >
+					<s:itemRenderer>
+						<fx:Component>
+							<s:GridItemRenderer creationComplete="init();" >
+								<fx:Script>
+									<![CDATA[
+										import spark.components.WindowedApplication;
+										import spark.components.DataGrid;
+										import spark.components.TitleWindow;
+										import mx.collections.ArrayCollection;
+										import mx.controls.Alert;
+										import mx.events.CloseEvent;
+										import mx.managers.PopUpManager;
+										import mx.rpc.events.FaultEvent;
+										import mx.rpc.events.ResultEvent;
+										import mx.rpc.http.HTTPService;
+										import com.data.MainInfo;
+										private var _year:String;
+										
+										private function init():void {
+//											trace(this.parentApplication.publicWin.name);
+											
+										}
+										
+										private function fnDeleteHandler():void {
+											if(this.pwTtxt.text=="") {
+												Alert.show("비밀번호를 입력해야 합니다.");
+												this.pwTtxt.setFocus();
+												return;
+											}
+											var tmp:DataGrid=DataGrid(this.parent.parent.parent.parent.parent.parent.parent.parent.parent);
+											//											trace(tmp.selectedItem["id"]);
+											var hs:HTTPService=new HTTPService();
+											hs.url=LessonManagementProgram._hsURL+"/lmp/editOutDataPasswordLoad.php?id="+tmp.selectedItem["id"]+"&year="+this.parentApplication._year;
+											trace(hs.url);
+											hs.resultFormat="text";
+											hs.addEventListener(ResultEvent.RESULT,fnResultOutDeletePassword);
+											hs.send();
+										}
+										private function fnResultOutDeletePassword(e:ResultEvent):void {
+											if(String(e.result)==this.pwTtxt.text) {
+												this.deleteData();
+											}
+											else {
+												Alert.show("비밀 번호가 틀립니다.");
+												this.pwTtxt.text="";
+												this.pwTtxt.setFocus();
+											}
+										}
+										private function deleteData():void {
+//											trace(DataGrid(this.parent.parent.parent.parent.parent.parent.parent.parent.parent).id);
+											var tmp:DataGrid=DataGrid(this.parent.parent.parent.parent.parent.parent.parent.parent.parent);
+											trace(tmp.selectedItem["id"]);
+											var hs:HTTPService=new HTTPService();
+											hs.url=LessonManagementProgram._hsURL+"/lmp/deleteOutData.php?id="+tmp.selectedItem["id"]+"&year="+this.parentApplication._year;;
+											hs.resultFormat="text";
+											hs.addEventListener(ResultEvent.RESULT,fnResultOutDelete);
+											hs.send();
+										}
+										private function fnResultOutDelete(e:ResultEvent):void {
+											if(String(e.result)=="ok") {
+												Alert.show("삭제했습니다.");
+												this.pwTtxt.text="";
+												this.parentApplication.publicWin.loadData();
+												this.parentApplication.publicWin.dispatchEvent(new Event("deleteComplete"));
+											}
+											else {
+												Alert.show("비밀번호가 틀립니다.\n확인 하세요.");
+											}
+										}
+										private function fnEditHandler():void {
+											if(this.pwTtxt.text=="") {
+												Alert.show("비밀번호를 입력해야 합니다.");
+												this.pwTtxt.setFocus();
+												return;
+											}
+											
+											var tmp:DataGrid=DataGrid(this.parent.parent.parent.parent.parent.parent.parent.parent.parent);
+//											trace(tmp.selectedItem["id"]);
+											
+											var hs:HTTPService=new HTTPService();
+											hs.url=LessonManagementProgram._hsURL+"/lmp/editOutDataPasswordLoad.php?id="+tmp.selectedItem["id"]+"&year="+this.parentApplication._year;
+											trace(hs.url);
+											hs.resultFormat="text";
+											hs.addEventListener(ResultEvent.RESULT,fnResultOutPassword);
+											hs.send();
+										}
+										private function fnResultOutPassword(e:ResultEvent):void {
+											trace(e.result);
+											if(String(e.result)==this.pwTtxt.text) {
+												var win:PublicListUpdateViewTitleWindow=new PublicListUpdateViewTitleWindow();
+												win._student=MainInfo(this.parentApplication.publicWin._student);
+												win._content=ArrayCollection(this.parentApplication.publicWin._ac).getItemAt(DataGrid(this.parentApplication.publicWin.dg).selectedIndex)["content"];
+												win._teacher=data.writer;
+												win._id=data.id;
+												win._year=this.parentApplication._year;
+												win.imageName=PublicListViewTitleWindow.imageName;
+												win.addEventListener("editComplete",fnEditComp);
+												PopUpManager.addPopUp(win,this.parentApplication as WindowedApplication,true);
+												PopUpManager.centerPopUp(win);												
+											}
+											else {
+												Alert.show("비밀 번호가 틀립니다.");
+												this.pwTtxt.text="";
+												this.pwTtxt.setFocus();
+											}
+										}
+										private function fnEditComp(e:Event):void {
+											this.pwTtxt.text="";
+											this.parentApplication.publicWin.dispatchEvent(new Event("editComplete"));
+											this.parentApplication.publicWin.loadData();
+										}
+									]]>
+								</fx:Script>
+								<s:VGroup horizontalCenter="0" verticalCenter="0" horizontalAlign="center">
+									<s:Label text="입력 시 비번"/>
+									<s:TextInput width="80" displayAsPassword="true" id="pwTtxt"/>
+									<s:Spacer width="10"/>
+									<s:Button label="수정" click="fnEditHandler();" />
+									<s:Button label="삭제" click="fnDeleteHandler();" />
+								</s:VGroup>
+							</s:GridItemRenderer>
+						</fx:Component>
+					</s:itemRenderer>
+				</s:GridColumn>
+			</s:ArrayList>
+		</s:columns >
+	</s:DataGrid>
+</s:TitleWindow>

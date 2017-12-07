@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" close="fnCloseHandler();" title="외부자료 보기"  
+			     height="500" width="400"
+			   xmlns:s="library://ns.adobe.com/flex/spark" backgroundColor="0xcccccc" creationComplete="init();" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:metadata="org.osmf.metadata.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Metadata>
+		[Event(name="editComplete", type="flash.events.Event")]
+	</fx:Metadata>
+	<fx:Script>
+		<![CDATA[
+			import com.data.MainInfo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.rpc.http.HTTPService;
+			[Bindable]
+			public var _student:MainInfo;
+			[Bindable]
+			private var _ac:ArrayCollection;
+			[Bindable]
+			public var imageName:String; // 선택학생의 사진
+			[Bindable]
+			public var _teacher:String;
+			public var _content:String;
+			public var _id:String;
+			public var _year:String;
+
+			private function init():void {
+				this.nameLbl.text=this._student.year+"학년 "+this._student.ban+"반 "+this._student.ban_no+"번"+this._student.name;
+//				imageName=LessonManagementProgram._hsURL+"/lmp/years/year"+this._year+"/year_"+_student.year+"/"+_student["ban"]+"/"+_student.name+"("+_student["ban_no"]+").jpg";
+				this.ta.text=_content;
+			}
+			private function fnCloseHandler():void {
+				PopUpManager.removePopUp(this);
+			}
+			private function fnFault(e:FaultEvent):void {
+				//				trace(e.message);
+				Alert.show("접속에 실패했습니다.\n관리자 문의하세요");
+			}
+			private function fnSaveHandler():void {
+				var hs:HTTPService=new HTTPService();
+				var imsi1:String=this.ta.text;
+				//				trace(imsi1);
+				var imsi:String=imsi1.replace(/\n/g,"|||| ");
+				var str:String="?id="+this._id+"&content="+imsi;
+				hs.url=LessonManagementProgram._hsURL+"/lmp/editOutData.php"+str+"&year="+this._year;
+				trace(hs.url);
+				hs.resultFormat="text";
+				hs.addEventListener(ResultEvent.RESULT,fnResultOut);
+				hs.addEventListener(FaultEvent.FAULT,fnFault);
+				hs.send();
+			}
+			private function fnResultOut(e:ResultEvent):void {
+				if(String(e.result)=="ok") {
+					Alert.show("수정했습니다.","확인",4,this,eventCreate);
+				}
+			}
+			private function eventCreate(e:Event):void {
+				this.dispatchEvent(new Event("editComplete"));
+				this.fnCloseHandler();
+			}
+		]]>
+	</fx:Script>
+	<s:Label id="nameLbl" fontSize="20" fontWeight="bold" x="30" y="50" />
+	<mx:Image source="{imageName}" maintainAspectRatio="true" right="10"
+			  top="10" width="90"/>
+	<s:Label text="입력 내용" y="120" left="10"/>
+	<s:TextArea width="90%" height="50%" id="ta" y="150" left="10" />
+	<s:Label text="{this._teacher} 선생님" bottom="15" left="5" />
+	<s:HGroup  bottom="15" horizontalCenter="0">
+		<s:Button label="저장" click="fnSaveHandler();" />
+		<s:Spacer width="20" />
+		<s:Button label="취소" click="this.fnCloseHandler();"/>
+	</s:HGroup>
+
+</s:TitleWindow>

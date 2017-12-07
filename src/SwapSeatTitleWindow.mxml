@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" close="fnCloseHandler();" title="좌석 바꾸기"  
+			     height="200" width="400"
+			   xmlns:s="library://ns.adobe.com/flex/spark" backgroundColor="0xcccccc" creationComplete="init();" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:metadata="org.osmf.metadata.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Metadata>
+		[Event(name="swapChange", type="flash.events.Event")]
+	</fx:Metadata>
+	<fx:Script>
+		<![CDATA[
+			import com.data.MainInfo;
+			
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.rpc.http.HTTPService;
+			import mx.utils.StringUtil;
+			
+			import spark.events.IndexChangeEvent;
+			public var _source:MainInfo;
+			public var _year:String;
+
+			private function init():void {
+				this.lbl.text=this._source.ban_no+"번 학생과 맞 바꿀 번호를 입력하세요.";
+				this.ti.setFocus();
+				trace(this._source.seatNumber);
+			}
+			private function fnCloseHandler():void {
+				PopUpManager.removePopUp(this);
+			}
+			private function changeSelection(event:IndexChangeEvent): void {
+				if(this.viewMenu.selectedItem=="Yes") {
+					var hs:HTTPService=new HTTPService();
+					var str:String="?year="+this._source.year+"&ban="+this._source.ban+"&ban_no="+this._source.ban_no;
+					str+="&change_ban_no="+this.ti.text+"&oldSeatNumber="+this._source.seatNumber;
+					hs.url=LessonManagementProgram._hsURL+"/lmp/changeSeat.php"+str+"&years="+this._year;
+					trace(hs.url);	
+					hs.resultFormat="text";
+					hs.addEventListener(ResultEvent.RESULT,fnResult1);
+					hs.addEventListener(FaultEvent.FAULT,fnFault);
+					hs.send();
+//					첫번째 학생 :year,ban,ban_no(this._source.ban_no),oldSeatNum(this._source.seatNumber),newSeatNum
+//					두번째 학생 :year,ban,ban_no(ti.text),newSeatNum,oldSeatNum
+//					trace("Selected Item: " + ButtonBar(event.target).selectedItem);
+				}
+				else if(this.viewMenu.selectedItem=="Cancel") {
+					this.fnCloseHandler();
+				}
+			}
+			private function fnFault(e:FaultEvent):void {
+				//				trace(e.message);
+				Alert.show("접속에 실패했습니다.\n관리자 문의하세요");
+			}
+			private function fnResult1(e:ResultEvent):void {
+				if(e.result=="ok") {
+					Alert.show("자리를 바꿨습니다.\n창을 닫습니다","확인",Alert.OK,this,alertClickHandler);
+				}
+			}
+			private function alertClickHandler(e:CloseEvent):void {
+				this.dispatchEvent(new Event("swapChange"));
+				this.fnCloseHandler();
+			}
+		]]>
+	</fx:Script>
+	<s:VGroup width="90%" height="80%" verticalAlign="middle" horizontalAlign="center"
+			  verticalCenter="0" horizontalCenter="0">
+		<s:HGroup verticalAlign="middle">
+			<s:Label id="lbl" fontSize="15"/>
+			<s:TextInput id="ti" width="50"/>
+		</s:HGroup>
+		<s:Spacer width="50"/>
+		<s:ButtonBar id="viewMenu" x="10" y="40" width="320" height="50"
+					 change="changeSelection(event)">
+			<s:dataProvider>
+				<s:ArrayCollection source="['Yes', 'Cancel']" />
+			</s:dataProvider>
+		</s:ButtonBar>
+	</s:VGroup>
+</s:TitleWindow>

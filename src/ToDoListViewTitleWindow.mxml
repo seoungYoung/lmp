@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" close="fnCloseHandler();"  
+			     title="::나의 스케쥴 목록::" height="450" width="750"
+			   xmlns:s="library://ns.adobe.com/flex/spark" backgroundColor="0xcccccc" creationComplete="init();" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:metadata="org.osmf.metadata.*">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import com.adobe.air.crypto.EncryptionKeyGenerator;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.dataGridClasses.DataGridColumn;
+			import mx.managers.PopUpManager;
+
+			private var conn:SQLConnection; // 디비 연결
+			private var query:SQLStatement; // 디비 실행 명령
+			private var updateQuery:SQLStatement; // 디비 실행 업데이트 명령 변수
+			public var _year:String;
+			
+//			private const TODOLIST_DAILY:String="toDoListDaily"; // 단일 디비에서 사용할 이름
+			//			private const TODOLIST_SCHEDULER:String="toDoListScheduler"; 디비를 달리 하고자 할 경우 이름.
+			[Bindable]
+			private var ac:ArrayCollection=new ArrayCollection(); // 오늘 날짜의 하는 일 저장
+			[Bindable]
+			private var acs:ArrayCollection=new ArrayCollection(); // 앞으로의 일 리스트 저장
+
+
+			private function init():void {
+				this.txtMemo.setFocus();
+				txtMemo.imeMode="KOREAN"; // 초기에 한글로 맞춤.
+				txtMemoS.imeMode="KOREAN"; // 초기에 한글로 맞춤.
+				mDate.selectedDate=new Date(); //자동 오늘 날짜
+				mDateS.selectedDate=new Date();
+				this.txtMemo.addEventListener(KeyboardEvent.KEY_DOWN,enterListener);
+				this.txtMemoS.addEventListener(KeyboardEvent.KEY_DOWN,enterListener);
+				openDatabase();
+			}
+			private function connect(file:File,fileMode:String):void {
+				// util을 이용한 디비 키 제작..
+				//				var encryptionKey:ByteArray=new EncryptionKeyGenerator().getEncryptionKey("StrongPassword1234");
+				conn=new SQLConnection();
+				conn.addEventListener(SQLEvent.OPEN,connectComplete);
+				try {
+					conn.open(file,fileMode);	
+					//					conn.open(file,fileMode,true,1024,encryptionKey);  보안 적용 오픈 방법
+				}
+				catch(e:Error) {
+					connectFail(e);	
+				}
+			}
+			private function updateComplete(e:SQLEvent):void {
+				var sm:SQLStatement=e.target as SQLStatement;
+				var result:SQLResult=sm.getResult();
+				if(result!=null && result.data!=null) {
+					var array:Array=result.data; // 모든 자료 가지고 있음
+					var arrToday:Array=[]; // 오늘 일정
+					var arrSchedule:Array=[]; //앞으로 일정 리스트
+					var curDate:String=returnCompareDate(new Date()); //오늘과 비교를 위한 변수(2012-1-1 형태)
+					
+					for(var i:uint=0;i<array.length;i++) {
+						//						trace(array[i].memoDate); 전체 보기..
+						if(returnCompareDate(array[i].memoDate)==curDate) {
+							arrToday.push(array[i]);
+							//							trace(array[i].memoDate);							
+						}
+						if(array[i].memoDate>new Date()) { // 오늘 이후로는 식이 맞음
+							arrSchedule.push(array[i]);
+						}
+					}
+					ac=new ArrayCollection(arrToday);
+					acs=new ArrayCollection(arrSchedule);
+				}
+				lblToday.text=ac.length+" 건";
+				lblSchudle.text=acs.length+" 건";
+			}
+			private function returnCompareDate(d:Date):String { 
+				return d.fullYear+"-"+d.month+"-"+d.date;
+			}
+			private function updateFail(e:SQLEvent):void {
+				trace("update Error..");
+			}
+			private function connectComplete(e:SQLEvent):void {
+				trace("connect complete");
+				query=new SQLStatement();
+				query.sqlConnection=conn;
+				query.addEventListener(SQLEvent.RESULT,queryResult);
+				query.addEventListener(SQLErrorEvent.ERROR,queryError);
+			}
+			private function queryResult(e:SQLEvent):void {
+				trace("query success");
+			}
+			private function queryError(e:SQLEvent):void {
+				trace("query Error");
+			}
+			private function connectFail(e:Error):void {
+				trace("connect Fail");
+			}
+			private function createTable():void {
+				trace("create Table start");
+				query.text="create table todo (no integer primary key autoincrement,memo text,done varchar(4),memoDate date);";
+				query.execute();
+			}
+			
+			private function enterListener(e:KeyboardEvent):void {
+				var order:String="insert into todo(memo,done,memoDate) values(";
+				if(e.keyCode==Keyboard.ENTER) {
+					if(e.currentTarget.id=="txtMemo") {
+						order+="@memo,@done,@memoDate";
+						order+=")";
+						query.parameters["@memo"]=txtMemo.text;
+						query.parameters["@done"]="Not!";
+						query.parameters["@memoDate"]=mDate.selectedDate;
+						txtMemo.text="";
+					}					
+					if(e.currentTarget.id=="txtMemoS") {
+						order+="@memo,@done,@memoDate";
+						order+=")";
+						query.parameters["@memo"]=txtMemoS.text;
+						query.parameters["@done"]="Not!";
+						query.parameters["@memoDate"]=mDateS.selectedDate;
+						txtMemoS.text="";
+					}										
+					query.text=order;
+					query.execute();
+					update();
+				}
+			}
+			private function update():void {
+				if(updateQuery==null) {
+					updateQuery=new SQLStatement();
+					updateQuery.addEventListener(SQLEvent.RESULT,updateComplete);
+					updateQuery.addEventListener(SQLErrorEvent.ERROR,updateFail);
+					updateQuery.sqlConnection=conn;
+				}
+				updateQuery.text="select no,memo,done,memoDate from todo";
+				updateQuery.execute();
+			}
+			private function openDatabase():void {
+				var file:File=File.documentsDirectory.resolvePath("./com/jsy/lmp/"+this._year+"/toDoListDaily.db");
+				if(file.exists==false) {
+					trace("file not exist");
+					connect(file,SQLMode.CREATE);
+					createTable();
+				}
+				else {
+					connect(file,SQLMode.UPDATE);
+					update();
+				}
+			}
+			private function returnDate(item:Object,dc:DataGridColumn):String {
+				//				trace(item.adviceDate);
+				var tmp:Date=item.memoDate;
+				var str:String=tmp.fullYear+"-"+(tmp.month+1)+"-"+tmp.date;
+				return str;
+			}	
+			private function dgClickHandler(e:MouseEvent):void {
+				//				trace(dg.selectedItem.no);
+				var curDG:DataGrid=e.currentTarget as DataGrid;
+				if(curDG.selectedItem==null) return;
+				editData(curDG.selectedItem.no,curDG.selectedItem.done);
+				update();
+			}
+			private function editData(no:int,done:String):void {
+				if(done=="Not!") {
+					updateQuery.text="update todo set done='"+"OK!"+"' where no="+no;
+				}
+				else {
+					updateQuery.text="update todo set done='"+"Not!"+"' where no="+no;
+				}
+				updateQuery.execute();
+			}
+			private function fnCloseHandler():void {
+				PopUpManager.removePopUp(this);
+			}
+		]]>
+	</fx:Script>
+	<s:HGroup width="90%" height="100%" gap="10" horizontalCenter="0">
+		<s:Group width="50%" height="100%">
+			<s:Label x="30" y="10" color="#0B06EA" fontSize="17" fontWeight="bold" text="오늘은 이런 일을 해야 해요!!"/>
+			<s:TextInput id="txtMemo"  x="5" y="35" width="230" height="21" tabIndex="1"/>
+			<mx:DateField id="mDate" x="250" y="35" tabIndex="2" />
+			<mx:DataGrid id="dg" x="0" y="60" width="100%" height="330" click="dgClickHandler(event);"
+						 dataProvider="{ac}" editable="false" tabIndex="5">
+				<mx:columns>
+					<mx:DataGridColumn headerText="No" dataField="no" width="30" textAlign="center"/>
+					<mx:DataGridColumn headerText="Memo" dataField="memo" textAlign="left" />
+					<mx:DataGridColumn headerText="날짜" labelFunction="returnDate" width="70" textAlign="center"/>
+					<mx:DataGridColumn headerText="시행" dataField="done" width="40" textAlign="center"
+									   color="0x0000ff"/>
+				</mx:columns>
+			</mx:DataGrid>
+			<s:Label id="lblToday" x="319" y="10" fontSize="15" text="건"/>
+		</s:Group>
+		<s:Group width="50%" height="100%">
+			<s:Label x="30" y="10" color="#ff0000" fontSize="17" fontWeight="bold" text="해당 날짜까지 해야 합니다~"/>
+			<s:TextInput id="txtMemoS" x="5" y="35" width="230" height="21" tabIndex="3"/>
+			<mx:DateField id="mDateS" x="250" y="35" tabIndex="4" />
+			<mx:DataGrid id="dgS" x="0" y="60" width="100%" height="330" click="dgClickHandler(event);"
+						 dataProvider="{acs}" editable="false" tabIndex="6">
+				<mx:columns>
+					<mx:DataGridColumn headerText="No" dataField="no" width="30" textAlign="center"/>
+					<mx:DataGridColumn headerText="Memo" dataField="memo" textAlign="left" />
+					<mx:DataGridColumn headerText="날짜" labelFunction="returnDate" width="70" textAlign="center"/>
+					<mx:DataGridColumn headerText="시행" dataField="done" width="40" textAlign="center"
+									   color="0xff0000"/>
+				</mx:columns>
+			</mx:DataGrid>
+			<s:Label id="lblSchudle" x="323" y="9" fontSize="15" text="건"/>			
+		</s:Group>
+	</s:HGroup>
+</s:TitleWindow>

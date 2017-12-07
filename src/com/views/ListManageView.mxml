@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Window xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  width="500" height="400" showStatusBar="false" title="항목관리" creationComplete="init();"
+		  xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Metadata>
+		[Event(name="reasonListChange", type="flash.events.Event")]
+	</fx:Metadata>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			public var _basePath:String;
+			[Bindable]
+			private var reasonList:ArrayCollection;
+			private function init():void {
+				this.stage.nativeWindow.x=(Screen.mainScreen.bounds.width-this.stage.nativeWindow.width)/2;
+				this.stage.nativeWindow.y=(Screen.mainScreen.bounds.height-this.stage.nativeWindow.height)/2;
+				this.listTxt.setFocus();
+				var file:File=File.documentsDirectory.resolvePath(this._basePath+"/progress/reasonList.dat");
+				if(file.exists) { 
+					var stream:FileStream=new FileStream();
+					stream.open(file,FileMode.READ);
+					var str1:String=stream.readMultiByte(stream.bytesAvailable,File.systemCharset);
+					var mStr:Array=str1.split("|||");
+					this.reasonList=new ArrayCollection(mStr);
+					stream.close();
+				}
+				else {
+					this.reasonList=new ArrayCollection(new Array());
+				}
+			}
+			private function fnInsertListener():void {
+				this.reasonList.addItem(this.listTxt.text); 
+			}
+			private function fnSaveHandler():void {
+				var file:File=File.documentsDirectory.resolvePath(this._basePath+"progress/reasonList.dat");
+				var stream:FileStream=new FileStream();
+				stream.open(file,FileMode.WRITE);
+				var str:String="";
+				for(var i:uint=0;i<this.reasonList.length;i++) {
+					if(i==this.reasonList.length-1) {
+						str+=this.reasonList.getItemAt(i);
+					}
+					else str+=this.reasonList.getItemAt(i)+"|||";
+				}
+				stream.writeMultiByte(str,File.systemCharset);
+				stream.close();	
+				this.dispatchEvent(new Event("reasonListChange"));
+				this.close();
+			}
+			private function fnDeleteListener():void {
+				if(dg.selectedIndex==-1) {
+					Alert.show("항목을 선택하세요.");
+					return;
+				}
+				this.reasonList.removeItemAt(this.dg.selectedIndex);
+			}
+			private function fnSelectChangeHandler():void {
+				this.listTxt.text=this.dg.selectedItem as String;
+			}
+			private function fnEditListener():void {
+				this.reasonList.setItemAt(this.listTxt.text,this.dg.selectedIndex);
+			}
+		]]>
+	</fx:Script>
+	<s:HGroup width="100%" top="20" left="20" verticalAlign="middle" >
+		<s:Label text="항목 추가"/>
+		<s:TextInput id="listTxt" width="120"/>
+		<s:Button label="추가하기" click="fnInsertListener();"/>
+		<s:Spacer width="10"/>
+		<s:Button label="수정하기" click="fnEditListener();"/>
+		<s:Spacer width="15"/>
+		<s:Button label="선택항목 삭제" click="fnDeleteListener();"/>
+	</s:HGroup>
+	<s:Label text="[현재 리스트]" fontSize="20" fontWeight="bold" color="0xff0000" horizontalCenter="0" y="60"/>
+	<s:DataGrid y="80" width="90%" height="70%" dataProvider="{this.reasonList}" horizontalCenter="0" 
+				selectionChange="fnSelectChangeHandler();" id="dg" >
+		<s:columns >
+			<s:ArrayList>
+				<s:GridColumn headerText="항목" width="300"  >
+					<s:itemRenderer>
+						<fx:Component>
+							<s:GridItemRenderer   >
+								<s:Label text="{data}" horizontalCenter="0" verticalCenter="0" height="30"/>
+							</s:GridItemRenderer>
+						</fx:Component>
+					</s:itemRenderer>
+				</s:GridColumn>
+			</s:ArrayList>
+		</s:columns>
+	</s:DataGrid>
+	<s:HGroup  bottom="15" horizontalCenter="0">
+		<s:Button label="저장" click="fnSaveHandler();" />
+		<s:Spacer width="20" />
+		<s:Button label="취소" click="this.close();"/>
+	</s:HGroup>
+</s:Window>
